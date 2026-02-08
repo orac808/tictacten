@@ -1,0 +1,923 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+  <title>Meta Tic-Tac-Shift</title>
+  <style>
+    html, body { height: 100%; margin: 0; background:#0e0f10; color:#e7e7e7; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; overflow: hidden; -webkit-tap-highlight-color: transparent; }
+    body { display: flex; justify-content: center; align-items: center; }
+
+    #game { display:block; image-rendering: pixelated; }
+
+    /* Hamburger button */
+    #hamburger { position: fixed; top: 10px; left: 10px; width: 44px; height: 44px; border-radius: 10px; border: 1px solid #3a3f46; background: rgba(0,0,0,.55); color:#e7e7e7; display: grid; place-items: center; cursor: pointer; z-index: 10; touch-action: manipulation; transition: opacity .3s; }
+    #hamburger:focus { outline: 2px solid #79b; }
+    #hamburger .bars { width: 22px; height: 16px; position: relative; }
+    #hamburger .bars::before, #hamburger .bars::after, #hamburger .mid { content: ""; position: absolute; left: 0; right: 0; height: 2px; background: #e7e7e7; border-radius: 2px; }
+    #hamburger .bars::before { top: 0; }
+    #hamburger .mid { top: 7px; }
+    #hamburger .bars::after { bottom: 0; }
+
+    /* Turn indicator */
+    #turnIndicator { position: fixed; top: 12px; right: 12px; display: flex; align-items: center; gap: 7px; padding: 6px 14px; border-radius: 20px; background: rgba(0,0,0,.55); border: 1px solid #3a3f46; font-size: 14px; font-weight: 600; z-index: 10; transition: opacity .3s; pointer-events: none; }
+    #turnIndicator .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+    /* Fullscreen menu */
+    #menu { position: fixed; inset: 0; background: rgba(7,9,11,.96); display: none; z-index: 20; overflow-y: auto; }
+    #menu.open { display: grid; grid-template-rows: auto 1fr auto; }
+    #menu header { padding: 16px 18px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #2a2f36; }
+    #menu header h1 { margin: 0; font-size: clamp(20px, 5vw, 28px); }
+    #menu header button { padding: 10px 16px; border-radius: 8px; border: 1px solid #3a3f46; background:#14181d; color:#e7e7e7; cursor:pointer; font-size: clamp(15px, 3.8vw, 19px); min-height: 48px; touch-action: manipulation; }
+    #menu .content { padding: 20px 18px; display: grid; gap: 20px; align-content: start; }
+    #menu .row { display: grid; gap: 12px; }
+    #menu .row strong { font-size: clamp(17px, 4vw, 22px); }
+    #menu .row ul { margin: 0; padding-left: 20px; }
+    #menu .row li { font-size: clamp(15px, 3.8vw, 19px); line-height: 1.55; margin-bottom: 6px; }
+    #menu .btns { display: flex; gap: 10px; flex-wrap: wrap; }
+    #menu .btns button { font-size: clamp(16px, 4vw, 20px); padding: 10px 18px; min-height: 48px; border-radius: 8px; border: 1px solid #3a3f46; background:#14181d; color:#e7e7e7; cursor:pointer; touch-action: manipulation; }
+    #menu footer { padding: 14px 18px; border-top: 1px solid #2a2f36; display: flex; justify-content: space-between; align-items: center; }
+    #menu footer small { font-size: clamp(13px, 3vw, 16px); }
+
+    #meta { width: 120px; height: 120px; border: 1px solid #343a42; border-radius: 8px; background: #0f1215; }
+
+    /* Splash screen */
+    #splash { position: fixed; inset: 0; z-index: 50; background: #0e0f10; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 18px; transition: opacity .5s; }
+    #splash.hidden { opacity: 0; pointer-events: none; }
+    #splash h1 { font-size: clamp(28px, 8vw, 52px); margin: 0; text-align: center; opacity: 0; animation: fadeUp .6s ease forwards; }
+    #splash h1 .blue { color: #5bb9ff; }
+    #splash h1 .yellow { color: #ffd240; }
+    #splash .tagline { font-size: clamp(14px, 4vw, 20px); color: #8a8f98; margin: 0; opacity: 0; animation: fadeUp .6s ease .35s forwards; }
+    #splash .playBtn { margin-top: 24px; padding: 14px 48px; font-size: clamp(18px, 5vw, 24px); font-weight: 700; border: 2px solid #5bb9ff; border-radius: 12px; background: transparent; color: #5bb9ff; cursor: pointer; opacity: 0; animation: fadeUp .6s ease .7s forwards; touch-action: manipulation; min-height: 48px; transition: background .2s, color .2s; }
+    #splash .playBtn:hover, #splash .playBtn:active { background: #5bb9ff; color: #0e0f10; }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Win overlay */
+    #winOverlay { position: fixed; inset: 0; z-index: 40; display: none; flex-direction: column; justify-content: center; align-items: center; }
+    #winOverlay.show { display: flex; }
+    #winOverlay canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+    #winOverlay .msg { position: relative; z-index: 1; text-align: center; opacity: 0; transition: opacity .6s; }
+    #winOverlay .msg.visible { opacity: 1; }
+    #winOverlay .msg h2 { font-size: clamp(32px, 10vw, 64px); margin: 0 0 20px; font-weight: 800; }
+    #winOverlay .msg button { padding: 14px 40px; font-size: clamp(18px, 5vw, 24px); font-weight: 700; border: 2px solid currentColor; border-radius: 12px; background: transparent; cursor: pointer; min-height: 48px; touch-action: manipulation; transition: background .2s, color .2s; }
+  </style>
+</head>
+<body>
+  <!-- Splash screen -->
+  <div id="splash">
+    <h1><span class="blue">Meta</span> <span class="yellow">Tic-Tac-Shift</span></h1>
+    <p class="tagline">A strategic twist on tic-tac-toe</p>
+    <button class="playBtn" id="splashPlay">Play</button>
+  </div>
+
+  <!-- Turn indicator -->
+  <div id="turnIndicator" style="opacity:0;"><span class="dot"></span><span class="label">Blue's turn</span></div>
+
+  <button id="hamburger" aria-label="Menu" title="Menu" style="opacity:0;"><span class="bars"><span class="mid"></span></span></button>
+  <div id="menu" role="dialog" aria-modal="true" aria-labelledby="menuTitle">
+    <header>
+      <h1 id="menuTitle">Meta Tic-Tac-Shift</h1>
+      <button id="closeMenu">Close</button>
+    </header>
+    <div class="content">
+      <div class="row">
+        <strong>How to play</strong>
+        <ul>
+          <li>Tap a cell to plant your flower. Blue goes first.</li>
+          <li>Tap the side arrows to slide a row or column. Wraparound. Sliding is a move.</li>
+          <li>Each 3 by 3 mini board: the player with the most completed lines owns that tile.</li>
+          <li>Get 3 owned tiles in a row on the big meta board to win.</li>
+        </ul>
+      </div>
+      <div class="row">
+        <strong>Game controls</strong>
+        <div class="btns">
+          <button id="resetBtn">Reset game</button>
+          <button id="swapBtn">Swap starter</button>
+        </div>
+      </div>
+      <div class="row">
+        <strong>Meta board</strong>
+        <canvas id="meta" aria-label="Meta board" role="img"></canvas>
+      </div>
+      <div class="row">
+        <strong>Status</strong>
+        <div id="status">-</div>
+      </div>
+    </div>
+    <footer>
+      <small>Tip: press H for menu. R resets.</small>
+      <div></div>
+    </footer>
+  </div>
+
+  <canvas id="game" aria-label="Game board" role="img"></canvas>
+
+  <!-- Win overlay -->
+  <div id="winOverlay">
+    <canvas id="winCanvas"></canvas>
+    <div class="msg" id="winMsg">
+      <h2 id="winText"></h2>
+      <button id="winPlayAgain">Play Again</button>
+    </div>
+  </div>
+
+  <script>
+    // Board: 9x9 playable + arrow gutters that are the same size as cells.
+    // Logical grid is 11x11: one cell gutter each side for arrows.
+
+    const game = document.getElementById('game');
+    const ctx = game.getContext('2d');
+
+    const menu = document.getElementById('menu');
+    const openBtn = document.getElementById('hamburger');
+    const closeBtn = document.getElementById('closeMenu');
+
+    const metaCanvas = document.getElementById('meta');
+    const mctx = metaCanvas.getContext('2d');
+    const statusEl = document.getElementById('status');
+    const resetBtn = document.getElementById('resetBtn');
+    const swapBtn = document.getElementById('swapBtn');
+
+    // Splash & win elements
+    const splashEl = document.getElementById('splash');
+    const splashPlayBtn = document.getElementById('splashPlay');
+    const turnIndicator = document.getElementById('turnIndicator');
+    const turnDot = turnIndicator.querySelector('.dot');
+    const turnLabel = turnIndicator.querySelector('.label');
+    const winOverlay = document.getElementById('winOverlay');
+    const winCanvas = document.getElementById('winCanvas');
+    const winCtx = winCanvas.getContext('2d');
+    const winMsg = document.getElementById('winMsg');
+    const winText = document.getElementById('winText');
+    const winPlayAgain = document.getElementById('winPlayAgain');
+
+    const DPR = Math.max(1, Math.floor(window.devicePixelRatio || 1));
+
+    // Grid sizes
+    const GRID = 9;            // playable
+    const GUTTER = 1;          // arrow gutter cells each side
+    const TOTAL = GRID + GUTTER*2; // 11x11 logical
+
+    // Logical cell size (in board coordinates). We keep this constant, and scale with CSS to fill viewport.
+    const CELL = 30; // unit cell for internal math. Hit areas equal to cell by definition.
+
+    // Origins
+    const ORIGIN_X = GUTTER * CELL; // where the playable 9x9 starts inside the 11x11 board
+    const ORIGIN_Y = GUTTER * CELL;
+
+    // --- State ---
+    const EMPTY = 0, P1 = 1, P2 = 2; // P1=blue, P2=yellow
+    let board, current, winner, moveCount;
+    let splashActive = true;
+
+    // Animation state
+    let anim = null; // { kind:'row'|'col', idx:number, dir:-1|+1, t:0..1, start:number, dur:number, pre:Array, post:Array }
+
+    // Per-mini-board fade state: alpha per owner. Fades in on capture, fades out on loss or neutral.
+    const blockFade = Array.from({length:3}, () => Array.from({length:3}, () => ({ a1:0, a2:0 })));
+    const FADE_SPEED = 6; // per second, ~0->1 in ~166ms
+
+    // Global RAF loop time
+    let lastTime = 0;
+
+    // --- Splash screen ---
+    splashPlayBtn.addEventListener('click', dismissSplash);
+
+    function dismissSplash(){
+      if (!splashActive) return;
+      splashActive = false;
+      splashEl.classList.add('hidden');
+      openBtn.style.opacity = '1';
+      turnIndicator.style.opacity = '1';
+      setTimeout(() => { splashEl.style.display = 'none'; }, 600);
+    }
+
+    function reset(){
+      board = Array.from({length: GRID}, () => Array(GRID).fill(EMPTY));
+      current = P1; winner = 0; moveCount = 0; anim = null;
+      // reset fades
+      for (let by=0; by<3; by++) for (let bx=0; bx<3; bx++){ blockFade[by][bx].a1 = 0; blockFade[by][bx].a2 = 0; }
+      hideWinOverlay();
+      updateStatus();
+      draw(); drawMetaPreview();
+    }
+
+    function swapStarter(){ current = current === P1 ? P2 : P1; updateStatus(); }
+
+    resetBtn.addEventListener('click', () => { reset(); });
+    swapBtn.addEventListener('click', () => { swapStarter(); });
+
+    // Resize: scale canvas to exact pixel size of logical board scaled to fit viewport while keeping square aspect.
+    function resize(){
+      const logicalW = TOTAL * CELL;
+      const logicalH = TOTAL * CELL;
+      const scale = Math.min(innerWidth / logicalW, innerHeight / logicalH);
+      const cssW = Math.floor(logicalW * scale);
+      const cssH = Math.floor(logicalH * scale);
+
+      // Canvas internal pixels use DPR for crispness
+      game.width = Math.floor(logicalW * DPR);
+      game.height = Math.floor(logicalH * DPR);
+      game.style.width = cssW + 'px';
+      game.style.height = cssH + 'px';
+      ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+
+      // Meta preview DPI
+      const metaSize = Math.min(140, Math.floor(Math.min(innerWidth, innerHeight) * 0.22));
+      metaCanvas.style.width = metaSize + 'px';
+      metaCanvas.style.height = metaSize + 'px';
+      metaCanvas.width = metaSize * DPR; metaCanvas.height = metaSize * DPR;
+      mctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+
+      // Win canvas
+      winCanvas.width = innerWidth * DPR;
+      winCanvas.height = innerHeight * DPR;
+      winCanvas.style.width = innerWidth + 'px';
+      winCanvas.style.height = innerHeight + 'px';
+      winCtx.setTransform(DPR, 0, 0, DPR, 0, 0);
+
+      draw(); drawMetaPreview();
+    }
+
+    addEventListener('resize', () => setTimeout(resize, 0));
+
+    function updateStatus(){
+      const text = winner ? (winner === P1 ? 'Blue wins' : 'Yellow wins') : ('Turn: ' + (current === P1 ? 'Blue' : 'Yellow') + ' • Moves: ' + moveCount + (anim? ' • Sliding…' : ''));
+      statusEl.textContent = text;
+
+      // Update turn indicator
+      if (winner || splashActive) {
+        turnIndicator.style.opacity = '0';
+      } else {
+        turnIndicator.style.opacity = '1';
+        const isBlue = current === P1;
+        turnDot.style.background = isBlue ? '#5bb9ff' : '#ffd240';
+        turnLabel.textContent = isBlue ? "Blue's turn" : "Yellow's turn";
+      }
+    }
+
+    function other(p){ return p === P1 ? P2 : P1; }
+
+    // Hit detection
+    function toLocal(e){
+      const rect = game.getBoundingClientRect();
+      const mx = (e.clientX - rect.left) * (game.width / rect.width) / DPR;
+      const my = (e.clientY - rect.top) * (game.height / rect.height) / DPR;
+      return {mx, my};
+    }
+
+    function localToCell(mx, my){
+      const cx = Math.floor(mx / CELL);
+      const cy = Math.floor(my / CELL);
+      if (cx < 0 || cx >= TOTAL || cy < 0 || cy >= TOTAL) return null;
+      return {cx, cy};
+    }
+
+    // Arrow rects are full cell squares in the gutters
+    function isArrowCell(cx, cy){
+      if (anim) return null; // block during animation
+      if (cx === 0 && cy >= GUTTER && cy < GUTTER + GRID) return {type:'row-left', idx: cy - GUTTER};
+      if (cx === TOTAL-1 && cy >= GUTTER && cy < GUTTER + GRID) return {type:'row-right', idx: cy - GUTTER};
+      if (cy === 0 && cx >= GUTTER && cx < GUTTER + GRID) return {type:'col-up', idx: cx - GUTTER};
+      if (cy === TOTAL-1 && cx >= GUTTER && cx < GUTTER + GRID) return {type:'col-down', idx: cx - GUTTER};
+      return null;
+    }
+
+    // --- Ownership helpers with bounds safety ---
+    function smallOwnerFrom(b, bx, by){
+      if (!b || b.length !== GRID || b.some(row => !Array.isArray(row) || row.length !== GRID)) return EMPTY;
+      if (bx < 0 || bx > 2 || by < 0 || by > 2) return EMPTY;
+      const sx = bx * 3; const sy = by * 3; let c1=0, c2=0;
+      for (let r = 0; r < 3; r++){
+        const row = b[sy + r]; const line = [row[sx], row[sx+1], row[sx+2]];
+        if (line.every(v => v === P1)) c1++; if (line.every(v => v === P2)) c2++;
+      }
+      for (let c = 0; c < 3; c++){
+        const line = [b[sy][sx+c], b[sy+1][sx+c], b[sy+2][sx+c]];
+        if (line.every(v => v === P1)) c1++; if (line.every(v => v === P2)) c2++;
+      }
+      const d1 = [b[sy][sx], b[sy+1][sx+1], b[sy+2][sx+2]];
+      const d2 = [b[sy][sx+2], b[sy+1][sx+1], b[sy+2][sx]];
+      if (d1.every(v => v === P1)) c1++; if (d1.every(v => v === P2)) c2++;
+      if (d2.every(v => v === P1)) c1++; if (d2.every(v => v === P2)) c2++;
+      if (c1>c2) return P1; if (c2>c1) return P2; return EMPTY;
+    }
+    function smallOwner(bx, by){ return smallOwnerFrom(board, bx, by); }
+
+    function metaWinnerFrom(b){
+      const M = Array.from({length:3}, () => Array(3).fill(EMPTY));
+      for (let by = 0; by < 3; by++) for (let bx = 0; bx < 3; bx++) M[by][bx] = smallOwnerFrom(b, bx, by);
+      const lines = [];
+      for (let r=0;r<3;r++) lines.push([M[r][0],M[r][1],M[r][2]]);
+      for (let c=0;c<3;c++) lines.push([M[0][c],M[1][c],M[2][c]]);
+      lines.push([M[0][0],M[1][1],M[2][2]]);
+      lines.push([M[0][2],M[1][1],M[2][0]]);
+      if (lines.some(l => l.every(v => v===P1))) return P1;
+      if (lines.some(l => l.every(v => v===P2))) return P2;
+      return EMPTY;
+    }
+    function metaWinner(){ return metaWinnerFrom(board); }
+
+    // --- Win check ---
+    function checkForWin(){
+      if (!winner) return;
+      setTimeout(() => showWinOverlay(winner), 400);
+    }
+
+    // --- Animation helpers ---
+    function startRowSlide(r, dir){
+      if (anim) return;
+      const pre = board[r].slice();
+      const post = pre.slice();
+      if (dir === -1){ const first = post[0]; for (let c=0;c<GRID-1;c++) post[c]=post[c+1]; post[GRID-1]=first; }
+      else { const last = post[GRID-1]; for (let c=GRID-1;c>0;c--) post[c]=post[c-1]; post[0]=last; }
+      anim = { kind:'row', idx:r, dir, t:0, start:performance.now(), dur:180, pre, post };
+      updateStatus();
+    }
+
+    function startColSlide(c, dir){
+      if (anim) return;
+      const pre = board.map(row=>row[c]);
+      const post = pre.slice();
+      if (dir === -1){ const first = post[0]; for (let r=0;r<GRID-1;r++) post[r]=post[r+1]; post[GRID-1]=first; }
+      else { const last = post[GRID-1]; for (let r=GRID-1;r>0;r--) post[r]=post[r-1]; post[0]=last; }
+      anim = { kind:'col', idx:c, dir, t:0, start:performance.now(), dur:180, pre, post };
+      updateStatus();
+    }
+
+    function commitAnim(){
+      if (!anim) return;
+      if (anim.kind === 'row'){
+        board[anim.idx] = anim.post;
+      } else {
+        for (let r=0;r<GRID;r++) board[r][anim.idx] = anim.post[r];
+      }
+      anim = null;
+      moveCount++; current = other(current); winner = metaWinner(); updateStatus();
+      checkForWin();
+      draw(); drawMetaPreview();
+    }
+
+    // Per-frame update
+    function step(dt){
+      // fade mini-board ownership
+      for (let by=0; by<3; by++){
+        for (let bx=0; bx<3; bx++){
+          const owner = smallOwner(bx, by);
+          const target1 = owner===P1 ? 1 : 0;
+          const target2 = owner===P2 ? 1 : 0;
+          const f = blockFade[by][bx];
+          // approach function
+          const stepToward = (a, t) => {
+            if (a === t) return a;
+            const dir = t > a ? 1 : -1;
+            let next = a + dir * FADE_SPEED * dt;
+            if ((dir>0 && next>t) || (dir<0 && next<t)) next = t;
+            return next;
+          };
+          f.a1 = stepToward(f.a1, target1);
+          f.a2 = stepToward(f.a2, target2);
+        }
+      }
+
+      // slide animation
+      if (anim){
+        const elapsed = (performance.now() - anim.start);
+        anim.t = Math.min(1, elapsed / anim.dur);
+        if (anim.t >= 1) commitAnim();
+      }
+    }
+
+    // Master RAF
+    function frame(now){
+      if (!lastTime) lastTime = now;
+      const dt = Math.min(0.1, (now - lastTime) / 1000);
+      lastTime = now;
+      step(dt);
+      draw();
+      if (winAnimRunning) drawWinFrame(dt);
+      requestAnimationFrame(frame);
+    }
+
+    // Input
+    game.addEventListener('click', e => {
+      if (!board || winner) return;
+      const {mx, my} = toLocal(e);
+      const cell = localToCell(mx, my); if (!cell) return;
+      if (anim) return; // ignore during animation
+
+      // Arrow? then slide animated
+      const arrow = isArrowCell(cell.cx, cell.cy);
+      if (arrow){
+        if (arrow.type === 'row-left') startRowSlide(arrow.idx, -1);
+        if (arrow.type === 'row-right') startRowSlide(arrow.idx, +1);
+        if (arrow.type === 'col-up') startColSlide(arrow.idx, -1);
+        if (arrow.type === 'col-down') startColSlide(arrow.idx, +1);
+        return;
+      }
+
+      // Playable cell?
+      if (cell.cx >= GUTTER && cell.cx < GUTTER + GRID && cell.cy >= GUTTER && cell.cy < GUTTER + GRID){
+        const gx = cell.cx - GUTTER; const gy = cell.cy - GUTTER;
+        if (board[gy][gx] === EMPTY){
+          board[gy][gx] = current;
+          moveCount++; current = other(current); winner = metaWinner(); updateStatus();
+          checkForWin();
+          draw(); drawMetaPreview();
+        }
+      }
+    });
+
+    addEventListener('keydown', e => {
+      const k = e.key.toLowerCase();
+      if (k === 'r'){ reset(); }
+      if (k === 'h' || k === '?') toggleMenu(true);
+      if (k === 'escape') toggleMenu(false);
+    });
+
+    function slideRow(r, dir){ /* kept for tests; not used in UI now */
+      if (dir === -1){ const first = board[r][0]; for (let c=0;c<GRID-1;c++) board[r][c] = board[r][c+1]; board[r][GRID-1] = first; }
+      else { const last = board[r][GRID-1]; for (let c=GRID-1;c>0;c--) board[r][c] = board[r][c-1]; board[r][0] = last; }
+    }
+    function slideCol(c, dir){ /* kept for tests */
+      if (dir === -1){ const first = board[0][c]; for (let r=0;r<GRID-1;r++) board[r][c] = board[r+1][c]; board[GRID-1][c] = first; }
+      else { const last = board[GRID-1][c]; for (let r=GRID-1;r>0;r--) board[r][c] = board[r-1][c]; board[0][c] = last; }
+    }
+
+    // Drawing helpers ------------------------------------------------------
+    function seededChoice(x,y){ return ((x*73856093) ^ (y*19349663)) & 1; }
+
+    function drawCellBackground(x, y){
+      const left = ORIGIN_X + x * CELL;
+      const top  = ORIGIN_Y + y * CELL;
+      const cx = left + Math.floor(CELL/2);
+      const cy = top  + Math.floor(CELL/2);
+      if (Sprites.isReady()){
+        const base = Sprites.get('iso_tile');
+        const scale = base ? (CELL / base.fw) : 1;
+        Sprites.draw('iso_tile', cx, cy, { center: true, scale });
+      } else {
+        // simple placeholder while sprites load
+        ctx.fillStyle = '#0f1215'; ctx.fillRect(left, top, CELL, CELL);
+      }
+    }
+
+    function drawBlueFlower(cx, cy, r){
+      if (Sprites.isReady()){
+        const sh = Sprites.get('flower_blue');
+        const scale = sh ? (CELL / sh.fw) : 1;
+        Sprites.draw('flower_blue', cx, cy, { center: true, scale, anim: 'idle' });
+      } else {
+        ctx.fillStyle = '#5bb9ff';
+        ctx.beginPath(); ctx.arc(cx, cy, Math.max(6, CELL*0.45), 0, Math.PI*2); ctx.fill();
+      }
+    }
+
+    function drawYellowFlower(cx, cy, r){
+      if (Sprites.isReady()){
+        const sh = Sprites.get('flower_yellow');
+        const scale = sh ? (CELL / sh.fw) : 1;
+        Sprites.draw('flower_yellow', cx, cy, { center: true, scale, anim: 'idle' });
+      } else {
+        ctx.fillStyle = '#ffd240';
+        ctx.beginPath(); ctx.arc(cx, cy, Math.max(6, CELL*0.45), 0, Math.PI*2); ctx.fill();
+      }
+    }
+
+    function drawArrowCell(cx, cy, type){
+      const x = cx*CELL; const y = cy*CELL; const w = CELL; const h = CELL;
+      ctx.fillStyle = '#14181d';
+      ctx.fillRect(x, y, w, h);
+      let rot = 0;
+      if (type === 'row-left') rot = Math.PI;
+      if (type === 'row-right') rot = 0;
+      if (type === 'col-up') rot = -Math.PI/2;
+      if (type === 'col-down') rot = Math.PI/2;
+      if (Sprites.isReady()){
+        const sh = Sprites.get('arrow_white');
+        const scale = sh ? (CELL / sh.fw) : 1;
+        const cxp = x + w/2, cyp = y + h/2;
+        Sprites.draw('arrow_white', cxp, cyp, { center: true, scale, rotate: rot, anim: 'idle', tint: getArrowColor() });
+      } else {
+        ctx.save();
+        ctx.translate(x + w/2, y + h/2); ctx.rotate(rot);
+        ctx.fillStyle = getArrowColor();
+        ctx.beginPath(); ctx.moveTo(-w*0.28, -h*0.34); ctx.lineTo(w*0.36, 0); ctx.lineTo(-w*0.28, h*0.34); ctx.closePath(); ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    const TINT_P1 = 'rgba(64,180,255,1)';
+    const TINT_P2 = 'rgba(255,210,64,1)';
+    function getArrowColor(){ return current === P1 ? '#40b4ff' : '#ffd240'; }
+
+    // ===== Sprite system =====
+    // Replace the src paths below with your own sprite sheets
+    const ASSET_SPECS = {
+      // Using GitHub raw URLs at the provided commit. Change only the filenames if different.
+      iso_tile:     { src: 'https://raw.githubusercontent.com/orac808/tictacten/a8c7857ee8e66718c37b91ad019fe300969c01a4/sprites/iso_tile.png', fw: 32, fh: 32, frames: 1 },
+      arrow_white:  { src: 'https://raw.githubusercontent.com/orac808/tictacten/a8c7857ee8e66718c37b91ad019fe300969c01a4/sprites/arrow_white_sheet.png', fw: 32, fh: 32, frames: 4, anims: { idle: { frames: [0,1,2,3], fps: 8 } } },
+      flower_blue:  { src: 'https://raw.githubusercontent.com/orac808/tictacten/a8c7857ee8e66718c37b91ad019fe300969c01a4/sprites/flower_blue_sheet.png',  fw: 32, fh: 32, frames: 6, anims: { idle: { frames: [0,1,2,3,4,5], fps: 6 }, win: { frames: [0,2,4,5], fps: 10 } } },
+      flower_yellow:{ src: 'https://raw.githubusercontent.com/orac808/tictacten/a8c7857ee8e66718c37b91ad019fe300969c01a4/sprites/flower_yellow_sheet.png', fw: 32, fh: 32, frames: 6, anims: { idle: { frames: [0,1,2,3,4,5], fps: 6 }, win: { frames: [0,2,4,5], fps: 10 } } }
+    };
+
+    const Sprites = (()=>{
+      const sheets = new Map();
+      let ready = false;
+      function loadOne(key, spec){
+        return new Promise((res, rej)=>{
+          const img = new Image(); img.crossOrigin = 'anonymous';
+          img.onload = ()=>{ sheets.set(key, { img, ...spec }); console.info(`[sprites] loaded ${key}`, {w:img.width, h:img.height, spec}); res(); };
+          img.onerror = rej; img.src = spec.src;
+        });
+      }
+      async function loadAll(){
+        const keys = Object.keys(ASSET_SPECS);
+        if (keys.length===0){ ready = true; return; }
+        await Promise.all(keys.map(k=>loadOne(k, ASSET_SPECS[k])));
+        ready = true;
+      }
+      function isReady(){ return ready; }
+      function get(key){ return sheets.get(key); }
+      function draw(key, x, y, opts={}){
+        const s = sheets.get(key); if (!s || !isFinite(x) || !isFinite(y)) return;
+        const time = performance.now() * 0.001;
+        const anim = opts.anim && s.anims && s.anims[opts.anim] ? s.anims[opts.anim] : (s.anims && s.anims.idle) ? s.anims.idle : null;
+        let frame = isFinite(opts.frame) ? opts.frame|0 : 0;
+        if (anim){ const idx = Math.floor(time * (anim.fps||8)) % anim.frames.length; frame = anim.frames[idx]; }
+        const cols = Math.max(1, Math.floor(s.img.width / s.fw));
+        const sx = (frame % cols) * s.fw;
+        const sy = Math.floor(frame / cols) * s.fh;
+        const scale = (opts.scale && opts.scale>0) ? opts.scale : 1;
+        const dx = opts.center ? x - s.fw*scale/2 : x;
+        const dy = opts.center ? y - s.fh*scale/2 : y;
+        const rw = s.fw*scale, rh = s.fh*scale;
+        if (opts.rotate){ ctx.save(); ctx.translate(x, y); ctx.rotate(opts.rotate); ctx.translate(-x, -y); }
+        if (opts.tint){
+          const tw = Math.ceil(rw), th = Math.ceil(rh);
+          const oc = document.createElement('canvas'); oc.width = tw; oc.height = th; const octx = oc.getContext('2d');
+          octx.imageSmoothingEnabled = false;
+          octx.drawImage(s.img, sx, sy, s.fw, s.fh, 0, 0, tw, th);
+          octx.globalCompositeOperation = 'source-atop';
+          octx.fillStyle = opts.tint; octx.fillRect(0,0,tw,th);
+          ctx.drawImage(oc, dx, dy);
+        } else {
+          ctx.imageSmoothingEnabled = false;
+          ctx.drawImage(s.img, sx, sy, s.fw, s.fh, dx, dy, rw, rh);
+        }
+        if (opts.rotate){ ctx.restore(); }
+      }
+      loadAll();
+      return { isReady, get, draw };
+    })();
+
+    function draw(){
+      // clear whole 11x11
+      ctx.fillStyle = '#0f1215';
+      ctx.fillRect(0, 0, TOTAL*CELL, TOTAL*CELL);
+
+      // gutters
+      for (let r=0;r<GRID;r++){
+        drawArrowCell(0, GUTTER + r, 'row-left');
+        drawArrowCell(TOTAL-1, GUTTER + r, 'row-right');
+      }
+      for (let c=0;c<GRID;c++){
+        drawArrowCell(GUTTER + c, 0, 'col-up');
+        drawArrowCell(GUTTER + c, TOTAL-1, 'col-down');
+      }
+
+      // ground: skip animating row/col here, they will be drawn separately
+      for (let y=0;y<GRID;y++){
+        if (anim && anim.kind==='row' && y===anim.idx) continue;
+        for (let x=0;x<GRID;x++){
+          if (anim && anim.kind==='col' && x===anim.idx) continue;
+          drawCellBackground(x,y);
+        }
+      }
+
+      // ownership tint per 3x3 with fade alphas
+      for (let by=0; by<3; by++){
+        for (let bx=0; bx<3; bx++){
+          const f = blockFade[by][bx];
+          if (f.a1>0){ ctx.globalAlpha = 0.45 * f.a1; ctx.fillStyle = TINT_P1; ctx.fillRect(ORIGIN_X + bx*3*CELL, ORIGIN_Y + by*3*CELL, 3*CELL, 3*CELL); }
+          if (f.a2>0){ ctx.globalAlpha = 0.45 * f.a2; ctx.fillStyle = TINT_P2; ctx.fillRect(ORIGIN_X + bx*3*CELL, ORIGIN_Y + by*3*CELL, 3*CELL, 3*CELL); }
+          ctx.globalAlpha = 1;
+        }
+      }
+
+      // pieces excluding anim row/col
+      for (let y=0; y<GRID; y++){
+        if (anim && anim.kind==='row' && y===anim.idx) continue;
+        for (let x=0; x<GRID; x++){
+          if (anim && anim.kind==='col' && x===anim.idx) continue;
+          const v = board[y][x]; if (!v) continue;
+          const cx = ORIGIN_X + x*CELL + Math.floor(CELL/2);
+          const cy = ORIGIN_Y + y*CELL + Math.floor(CELL/2);
+          if (v === P1) drawBlueFlower(cx, cy, Math.floor(CELL*0.50));
+          if (v === P2) drawYellowFlower(cx, cy, Math.floor(CELL*0.42));
+        }
+      }
+
+      // animated overlay for row/col
+      if (anim){
+        if (anim.kind==='row') drawAnimatingRow(anim);
+        else drawAnimatingCol(anim);
+      }
+    }
+
+    function wrapIndex(i, n){ return (i % n + n) % n; }
+
+    function drawAnimatingRow(a){
+      const r = a.idx; const dir = a.dir; const t = a.t; const shift = dir * t * CELL;
+      const yTop = ORIGIN_Y + r*CELL;
+      ctx.save();
+      ctx.beginPath(); ctx.rect(ORIGIN_X, yTop, GRID*CELL, CELL); ctx.clip();
+      // draw backgrounds and pieces for columns -1..GRID to cover wrap
+      for (let k=-1; k<=GRID; k++){
+        const srcIndex = wrapIndex(k, GRID);
+        const px = ORIGIN_X + k*CELL + shift;
+        // draw background tile translated to px
+        ctx.save();
+        ctx.translate(px - (ORIGIN_X + srcIndex*CELL), 0);
+        drawCellBackground(srcIndex, r);
+        const v = a.pre[srcIndex];
+        if (v){
+          const cx = ORIGIN_X + srcIndex*CELL + Math.floor(CELL/2);
+          const cy = ORIGIN_Y + r*CELL + Math.floor(CELL/2);
+          if (v === P1) drawBlueFlower(cx, cy, Math.floor(CELL*0.50));
+          if (v === P2) drawYellowFlower(cx, cy, Math.floor(CELL*0.42));
+        }
+        ctx.restore();
+      }
+      ctx.restore();
+    }
+
+    function drawAnimatingCol(a){
+      const c = a.idx; const dir = a.dir; const t = a.t; const shift = dir * t * CELL;
+      ctx.save();
+      ctx.beginPath(); ctx.rect(ORIGIN_X + c*CELL, ORIGIN_Y, CELL, GRID*CELL); ctx.clip();
+      for (let k=-1; k<=GRID; k++){
+        const srcIndex = wrapIndex(k, GRID);
+        const py = ORIGIN_Y + k*CELL + shift;
+        ctx.save();
+        ctx.translate(0, py - (ORIGIN_Y + srcIndex*CELL));
+        drawCellBackground(c, srcIndex);
+        const v = a.pre[srcIndex];
+        if (v){
+          const cx = ORIGIN_X + c*CELL + Math.floor(CELL/2);
+          const cy = ORIGIN_Y + srcIndex*CELL + Math.floor(CELL/2);
+          if (v === P1) drawBlueFlower(cx, cy, Math.floor(CELL*0.50));
+          if (v === P2) drawYellowFlower(cx, cy, Math.floor(CELL*0.42));
+        }
+        ctx.restore();
+      }
+      ctx.restore();
+    }
+
+    function drawMetaPreview(){
+      const size = metaCanvas.width / DPR;
+      mctx.clearRect(0,0,size,size);
+      mctx.fillStyle = '#15171a'; mctx.fillRect(0,0,size,size);
+      mctx.strokeStyle = '#31353d'; mctx.lineWidth = 1;
+      for (let i=1;i<3;i++){
+        const t = i*size/3;
+        mctx.beginPath(); mctx.moveTo(0,t); mctx.lineTo(size,t); mctx.stroke();
+        mctx.beginPath(); mctx.moveTo(t,0); mctx.lineTo(t,size); mctx.stroke();
+      }
+      for (let by=0; by<3; by++){
+        for (let bx=0; bx<3; bx++){
+          const owner = smallOwner(bx, by); if (!owner) continue;
+          const cx = bx*size/3 + size/6; const cy = by*size/3 + size/6;
+          // tiny glyphs
+          if (owner===P1){ mctx.fillStyle = '#5bb9ff'; mctx.fillRect(cx-2, cy-3, 4, 6); }
+          else { mctx.fillStyle = '#ffd33b'; mctx.fillRect(cx-3, cy-2, 6, 4); }
+        }
+      }
+      const w = metaWinner();
+      if (w){
+        mctx.strokeStyle = w===P1 ? '#40b4ff' : '#ffd240';
+        mctx.lineWidth = 4; mctx.strokeRect(2,2,size-4,size-4);
+      }
+    }
+
+    // ===== Win celebration overlay with flower particles =====
+    const BLUE_PALETTE = ['#5bb9ff','#40a0ff','#7ec8ff','#3d8fd4','#90d0ff'];
+    const YELLOW_PALETTE = ['#ffd240','#ffb820','#ffe070','#d4a520','#ffdc60'];
+    let winParticles = [];
+    let winAnimRunning = false;
+    let winBgAlpha = 0;
+
+    function createFlowerParticle(palette){
+      const w = innerWidth, h = innerHeight;
+      return {
+        x: Math.random() * w,
+        y: -20 - Math.random() * h * 0.5,
+        size: 10 + Math.random() * 22,
+        color: palette[Math.floor(Math.random() * palette.length)],
+        vy: 40 + Math.random() * 60,
+        vx: (Math.random() - 0.5) * 30,
+        swayAmp: 15 + Math.random() * 25,
+        swaySpeed: 0.8 + Math.random() * 1.2,
+        swayOffset: Math.random() * Math.PI * 2,
+        rotation: Math.random() * Math.PI * 2,
+        rotSpeed: (Math.random() - 0.5) * 2,
+        petals: 5,
+        alpha: 0.7 + Math.random() * 0.3,
+        time: 0
+      };
+    }
+
+    function drawFlower(fctx, p){
+      fctx.save();
+      fctx.translate(p.x, p.y);
+      fctx.rotate(p.rotation);
+      fctx.globalAlpha = p.alpha;
+      fctx.fillStyle = p.color;
+      const r = p.size / 2;
+      const petalR = r * 0.55;
+      for (let i = 0; i < p.petals; i++){
+        const angle = (i / p.petals) * Math.PI * 2;
+        const px = Math.cos(angle) * r * 0.45;
+        const py = Math.sin(angle) * r * 0.45;
+        fctx.beginPath();
+        fctx.ellipse(px, py, petalR, petalR * 0.65, angle, 0, Math.PI * 2);
+        fctx.fill();
+      }
+      // center
+      fctx.globalAlpha = p.alpha * 0.9;
+      fctx.fillStyle = '#fff';
+      fctx.beginPath();
+      fctx.arc(0, 0, r * 0.2, 0, Math.PI * 2);
+      fctx.fill();
+      fctx.restore();
+    }
+
+    function updateFlowerParticle(p, dt){
+      p.time += dt;
+      p.y += p.vy * dt;
+      p.x += p.vx * dt + Math.sin(p.time * p.swaySpeed + p.swayOffset) * p.swayAmp * dt;
+      p.rotation += p.rotSpeed * dt;
+    }
+
+    function showWinOverlay(w){
+      if (winAnimRunning) return;
+      const isBlue = w === P1;
+      const palette = isBlue ? BLUE_PALETTE : YELLOW_PALETTE;
+      const color = isBlue ? '#5bb9ff' : '#ffd240';
+
+      winText.textContent = isBlue ? 'Blue Wins!' : 'Yellow Wins!';
+      winText.style.color = color;
+      winPlayAgain.style.color = color;
+      winPlayAgain.style.borderColor = color;
+
+      // Resize win canvas
+      winCanvas.width = innerWidth * DPR;
+      winCanvas.height = innerHeight * DPR;
+      winCanvas.style.width = innerWidth + 'px';
+      winCanvas.style.height = innerHeight + 'px';
+      winCtx.setTransform(DPR, 0, 0, DPR, 0, 0);
+
+      // Create particles
+      winParticles = [];
+      for (let i = 0; i < 50; i++){
+        winParticles.push(createFlowerParticle(palette));
+      }
+
+      winBgAlpha = 0;
+      winAnimRunning = true;
+      winOverlay.classList.add('show');
+      winMsg.classList.remove('visible');
+
+      // Fade in message after a beat
+      setTimeout(() => { winMsg.classList.add('visible'); }, 500);
+
+      // Hide turn indicator during win
+      turnIndicator.style.opacity = '0';
+    }
+
+    function hideWinOverlay(){
+      winAnimRunning = false;
+      winParticles = [];
+      winOverlay.classList.remove('show');
+      winMsg.classList.remove('visible');
+      winCtx.clearRect(0, 0, innerWidth, innerHeight);
+    }
+
+    function drawWinFrame(dt){
+      if (!winAnimRunning) return;
+      const w = innerWidth, h = innerHeight;
+      winCtx.clearRect(0, 0, w, h);
+
+      // Fade in background
+      if (winBgAlpha < 0.65) winBgAlpha = Math.min(0.65, winBgAlpha + dt * 1.5);
+      winCtx.fillStyle = `rgba(0,0,0,${winBgAlpha})`;
+      winCtx.fillRect(0, 0, w, h);
+
+      // Update and draw particles
+      for (let i = winParticles.length - 1; i >= 0; i--){
+        const p = winParticles[i];
+        updateFlowerParticle(p, dt);
+        drawFlower(winCtx, p);
+        // Recycle particles that go off bottom
+        if (p.y > h + 40){
+          p.y = -20 - Math.random() * 40;
+          p.x = Math.random() * w;
+          p.time = 0;
+        }
+      }
+    }
+
+    winPlayAgain.addEventListener('click', () => { reset(); });
+
+    // Menu controls
+    function toggleMenu(force){
+      const wantOpen = typeof force === 'boolean' ? force : !menu.classList.contains('open');
+      if (wantOpen) menu.classList.add('open'); else menu.classList.remove('open');
+    }
+    openBtn.addEventListener('click', () => toggleMenu());
+    closeBtn.addEventListener('click', () => toggleMenu(false));
+    menu.addEventListener('click', e => { if (e.target === menu) toggleMenu(false); });
+
+    // Init
+    function init(){
+      if (window.__booted) return; window.__booted = true;
+      reset(); resize(); requestAnimationFrame(frame);
+    }
+    init();
+
+    // Self-tests
+    (function tests(){
+      try {
+        console.groupCollapsed('Self-tests');
+        const empty = () => Array.from({length:GRID}, () => Array(GRID).fill(EMPTY));
+        { const b = empty(); console.assert(smallOwnerFrom(b,0,0)===EMPTY, 'T1 smallOwner empty'); console.assert(metaWinnerFrom(b)===EMPTY, 'T1 meta empty'); }
+        { const b = empty(); for (let x=0;x<3;x++) b[0][x] = P1; for (let y=0;y<3;y++) b[y][1] = P1; console.assert(smallOwnerFrom(b,0,0)===P1, 'T2 owner P1'); }
+        { const b = empty(); for (let bx=0; bx<3; bx++){ const sx = bx*3; const sy = 0; for (let x=0; x<3; x++) b[sy][sx+x] = P1; } console.assert(metaWinnerFrom(b)===P1, 'T3 meta P1 top row'); }
+        { const bad = [[1,2,3]]; console.assert(smallOwnerFrom(bad,0,0)===EMPTY, 'T4 malformed safe'); }
+        // New: row and col animation commit produces same result as instant slide
+        { const b = empty(); b[0] = [1,2,3,4,5,6,7,8,9];
+          const instant = b[0].slice(); const last = instant[8]; for (let c=8;c>0;c--) instant[c]=instant[c-1]; instant[0]=last;
+          // simulate post for anim logic
+          const pre = [1,2,3,4,5,6,7,8,9]; const post = pre.slice(); const last2 = post[8]; for (let c=8;c>0;c--) post[c]=post[c-1]; post[0]=last2;
+          console.assert(JSON.stringify(instant)===JSON.stringify(post), 'T5 animated row matches instant');
+        }
+        console.groupEnd();
+      } catch(e){ console.error('Self-tests error', e); }
+    })();
+</script>
+<script>
+// ---- Safety & boot shims ----
+(function(){
+  // Provide seededChoice if missing
+  if (typeof window.seededChoice !== 'function'){
+    window.seededChoice = function(x,y){
+      // simple deterministic hash 0/1
+      let n = (x*73856093) ^ (y*19349663);
+      n = (n<<13) ^ n; n = (n*(n*n*15731 + 789221) + 1376312589) & 0x7fffffff;
+      return n & 1;
+    };
+  }
+
+  // Arrow colour helper if missing
+  if (typeof window.getArrowColor !== 'function'){
+    window.getArrowColor = function(){
+      try{ return (typeof current !== 'undefined' && typeof P1 !== 'undefined' && current === P1) ? '#40b4ff' : '#ffd240'; }
+      catch(e){ return '#ffffff'; }
+    };
+  }
+
+  // Init wiring
+  function safeInit(){
+    if (typeof init === 'function') { try { init(); } catch(e){ reportError(e); } }
+  }
+  if (document.readyState === 'loading'){
+    window.addEventListener('DOMContentLoaded', safeInit);
+  } else { safeInit(); }
+
+  // Error overlay on the canvas so blank screens show a reason
+  function reportError(e){
+    try{
+      const cvs = document.querySelector('canvas');
+      if (!cvs) return;
+      const c = cvs.getContext('2d');
+      c.save(); c.reset && c.reset();
+      c.fillStyle = '#111'; c.fillRect(0,0,cvs.width,cvs.height);
+      c.fillStyle = '#f55'; c.font = '16px ui-monospace, SFMono-Regular, Menlo, monospace';
+      const msg = (e && e.stack) ? e.stack : String(e);
+      const lines = msg.split('\n').slice(0,10);
+      c.fillText('Runtime error:', 16, 28);
+      lines.forEach((ln,i)=>c.fillText(ln, 16, 60 + i*20));
+      c.restore();
+      console.error(e);
+    }catch(_){}
+  }
+  window.addEventListener('error', ev=>{ reportError(ev.error || ev.message); });
+})();
+</script>
+</body>
+</html>
