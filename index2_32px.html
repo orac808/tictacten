@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
-  <title>Meta Tic-Tac-Shift</title>
+  <title>Floramancy</title>
   <style>
     @font-face {
       font-family: 'Alagard';
@@ -43,8 +43,12 @@
     #menu .row li { font-size: clamp(15px, 3.8vw, 19px); line-height: 1.55; margin-bottom: 6px; }
     #menu .btns { display: flex; gap: 10px; flex-wrap: wrap; }
     #menu .btns button { font-size: clamp(16px, 4vw, 20px); padding: 10px 18px; min-height: 48px; border-radius: 8px; border: 1px solid #3a3f46; background:#0a0a0a; color:#e7e7e7; cursor:pointer; touch-action: manipulation; }
+    #menu .sliders { display: grid; gap: 8px; }
+    #menu .sliders label { display: flex; align-items: center; gap: 10px; font-size: clamp(14px, 3.5vw, 18px); }
+    #menu .sliders input[type="range"] { flex: 1; accent-color: #5bb9ff; height: 6px; }
     #menu footer { padding: 14px 18px; border-top: 1px solid #2a2f36; display: flex; justify-content: space-between; align-items: center; }
     #menu footer small { font-size: clamp(13px, 3vw, 16px); }
+    #menu header, #menu .content, #menu footer { max-width: 700px; width: 100%; margin-left: auto; margin-right: auto; box-sizing: border-box; }
 
     #meta { width: 120px; height: 120px; border: 1px solid #343a42; border-radius: 8px; background: #0a0a0a; }
 
@@ -57,6 +61,7 @@
     #splash .tagline { font-size: clamp(14px, 4vw, 20px); color: #8a8f98; margin: 0; opacity: 0; animation: fadeUp .6s ease .35s forwards; }
     #splash .playBtn { margin-top: 24px; padding: 14px 48px; font-size: clamp(18px, 5vw, 24px); font-weight: 700; border: 2px solid #5bb9ff; border-radius: 12px; background: transparent; color: #5bb9ff; cursor: pointer; opacity: 0; animation: fadeUp .6s ease .7s forwards; touch-action: manipulation; min-height: 48px; transition: background .2s, color .2s; }
     #splash .playBtn:hover, #splash .playBtn:active { background: #5bb9ff; color: #000000; }
+    .mode-btns { display: flex; gap: 12px; justify-content: center; }
 
     @keyframes fadeUp {
       from { opacity: 0; transform: translateY(16px); }
@@ -76,9 +81,12 @@
 <body>
   <!-- Splash screen -->
   <div id="splash">
-    <h1><span class="blue">Meta</span> <span class="yellow">Tic-Tac-Shift</span></h1>
+    <h1><span class="blue">Flora</span><span class="yellow">mancy</span></h1>
     <p class="tagline">A strategic twist on tic-tac-toe</p>
-    <button class="playBtn" id="splashPlay">Play</button>
+    <div class="mode-btns">
+      <button class="playBtn" id="splash1P">1 Player</button>
+      <button class="playBtn" id="splash2P">2 Player</button>
+    </div>
   </div>
 
   <!-- Turn indicator -->
@@ -87,7 +95,7 @@
   <button id="hamburger" aria-label="Menu" title="Menu" style="opacity:0;"><span class="bars"><span class="mid"></span></span></button>
   <div id="menu" role="dialog" aria-modal="true" aria-labelledby="menuTitle">
     <header>
-      <h1 id="menuTitle">Meta Tic-Tac-Shift</h1>
+      <h1 id="menuTitle">Floramancy</h1>
       <button id="closeMenu">Close</button>
     </header>
     <div class="content">
@@ -105,6 +113,24 @@
         <div class="btns">
           <button id="resetBtn">Reset game</button>
           <button id="swapBtn">Swap starter</button>
+          <button id="modeBtn">Mode: 2P</button>
+        </div>
+      </div>
+      <div class="row">
+        <strong>Slide cooldown</strong>
+        <div class="sliders">
+          <label>Forbidden slides <input type="range" id="slideCooldownSlider" min="0" max="18" value="2"> <span id="slideCooldownVal">2</span></label>
+        </div>
+      </div>
+      <div class="row">
+        <strong>Sound</strong>
+        <div class="btns">
+          <button id="musicToggle">Music: On</button>
+          <button id="sfxToggle">SFX: On</button>
+        </div>
+        <div class="sliders">
+          <label>Music <input type="range" id="musicVol" min="0" max="100" value="30"></label>
+          <label>SFX <input type="range" id="sfxVol" min="0" max="100" value="80"></label>
         </div>
       </div>
       <div class="row">
@@ -122,6 +148,8 @@
     </footer>
   </div>
 
+  <div id="ytPlayer" style="position:absolute;width:1px;height:1px;overflow:hidden;pointer-events:none;"></div>
+  <audio id="localMusic" loop preload="auto" style="display:none;"></audio>
   <canvas id="game" aria-label="Game board" role="img"></canvas>
 
   <!-- Win overlay -->
@@ -152,7 +180,9 @@
 
     // Splash & win elements
     const splashEl = document.getElementById('splash');
-    const splashPlayBtn = document.getElementById('splashPlay');
+    const splash1PBtn = document.getElementById('splash1P');
+    const splash2PBtn = document.getElementById('splash2P');
+    const modeBtn = document.getElementById('modeBtn');
     const turnIndicator = document.getElementById('turnIndicator');
     const turnDot = turnIndicator.querySelector('.dot');
     const turnLabel = turnIndicator.querySelector('.label');
@@ -162,6 +192,180 @@
     const winMsg = document.getElementById('winMsg');
     const winText = document.getElementById('winText');
     const winPlayAgain = document.getElementById('winPlayAgain');
+    const musicToggle = document.getElementById('musicToggle');
+    const sfxToggle = document.getElementById('sfxToggle');
+    const musicVolEl = document.getElementById('musicVol');
+    const sfxVolEl = document.getElementById('sfxVol');
+    const localMusicEl = document.getElementById('localMusic');
+    const slideCooldownSlider = document.getElementById('slideCooldownSlider');
+    const slideCooldownVal = document.getElementById('slideCooldownVal');
+
+    // ===== Sound System =====
+    const Sound = (() => {
+      let actx = null, sfxGain = null;
+      let sfxOn = true, musicOn = true;
+      let sfxVol = 0.8, musicVol = 30;
+      let musicDucked = false;
+      const buffers = {};
+      const audioEls = {};
+      const SFX = {
+        place:        'sfx/place.mp3',
+        slide:        'sfx/slide.mp3',
+        capture:      'sfx/capture.mp3',
+        multicapture: 'sfx/multicapture.mp3',
+        win:          'sfx/win.mp3'
+      };
+      let gestureReceived = false;
+      let onGestureQueue = null;
+
+      const ls = k => { try { return localStorage.getItem(k); } catch(e) { return null; } };
+      if (ls('sfxOn') === 'false') sfxOn = false;
+      if (ls('musicOn') === 'false') musicOn = false;
+      if (ls('sfxVol') !== null) sfxVol = +ls('sfxVol');
+      if (ls('musicVol') !== null) musicVol = +ls('musicVol');
+
+      function unlock() {
+        if (gestureReceived) return;
+        gestureReceived = true;
+        try {
+          actx = new (window.AudioContext || window.webkitAudioContext)();
+          if (actx.state === 'suspended') actx.resume();
+          sfxGain = actx.createGain();
+          sfxGain.gain.value = sfxVol;
+          sfxGain.connect(actx.destination);
+          loadAll();
+        } catch(e) { console.warn('[sound] AudioContext failed', e); }
+        if (isLocal) {
+          localMusicEl.src = 'sfx/music/bg.mp3';
+          localMusicEl.volume = musicVol / 100;
+          if (musicOn) localMusicEl.play().catch(() => {});
+        } else {
+          const s = document.createElement('script');
+          s.src = 'https://www.youtube.com/iframe_api';
+          document.body.appendChild(s);
+          if (onGestureQueue) { onGestureQueue(); onGestureQueue = null; }
+        }
+      }
+
+      async function loadAll() {
+        for (const [name, path] of Object.entries(SFX)) {
+          if (isLocal) {
+            const a = new Audio(path);
+            a.preload = 'auto';
+            audioEls[name] = a;
+          } else {
+            try {
+              const arr = await new Promise((resolve, reject) => {
+                const xhr = new XMLHttpRequest();
+                xhr.open('GET', path, true);
+                xhr.responseType = 'arraybuffer';
+                xhr.onload = () => (xhr.status === 200 || xhr.status === 0)
+                  ? resolve(xhr.response) : reject(new Error(xhr.statusText));
+                xhr.onerror = () => reject(new Error('XHR failed'));
+                xhr.send();
+              });
+              buffers[name] = await actx.decodeAudioData(arr);
+            } catch(e) { console.warn(`[sfx] failed: ${name}`, e); }
+          }
+        }
+      }
+
+      function play(name, opts = {}) {
+        if (!sfxOn) return;
+        if (isLocal) {
+          const el = audioEls[name];
+          if (!el) return;
+          const clone = el.cloneNode();
+          clone.volume = sfxVol;
+          clone.play().catch(() => {});
+          return;
+        }
+        if (!actx || !sfxGain || !buffers[name]) return;
+        const src = actx.createBufferSource();
+        src.buffer = buffers[name];
+        src.playbackRate.value = opts.pitchVar ? 0.9 + Math.random() * 0.2 : 1.0;
+        src.connect(sfxGain);
+        src.start(0);
+      }
+
+      function setSfxVol(v) { sfxVol = v; if (sfxGain) sfxGain.gain.value = v; try { localStorage.setItem('sfxVol', v); } catch(e){} }
+
+      function musicPlay() {
+        if (isLocal) { localMusicEl.play().catch(() => {}); }
+        else if (ytPlayer && ytReady) { ytPlayer.playVideo(); }
+      }
+      function musicPause() {
+        if (isLocal) { localMusicEl.pause(); }
+        else if (ytPlayer && ytReady) { ytPlayer.pauseVideo(); }
+      }
+      function musicSetVol(v) {
+        if (isLocal) { localMusicEl.volume = v / 100; }
+        else if (ytPlayer && ytReady) { ytPlayer.setVolume(v); }
+      }
+
+      function setMusicVol(v) {
+        musicVol = v; try { localStorage.setItem('musicVol', v); } catch(e){}
+        if (!musicDucked) musicSetVol(v);
+      }
+
+      function duckMusic() {
+        if (!musicOn) return;
+        musicDucked = true;
+        musicSetVol(Math.round(musicVol * 0.1));
+        setTimeout(() => { musicDucked = false; if (musicOn) musicSetVol(musicVol); }, 3000);
+      }
+
+      function toggleSfx() { sfxOn = !sfxOn; try { localStorage.setItem('sfxOn', sfxOn); } catch(e){} return sfxOn; }
+      function toggleMusic() {
+        musicOn = !musicOn;
+        try { localStorage.setItem('musicOn', musicOn); } catch(e){}
+        if (musicOn) { musicPlay(); } else { musicPause(); }
+        if (!isLocal && musicOn && !ytPlayer && typeof YT !== 'undefined' && YT.Player) createYTPlayer();
+        return musicOn;
+      }
+
+      return { unlock, play, setSfxVol, setMusicVol, duckMusic,
+               toggleSfx, toggleMusic,
+               isSfxOn: () => sfxOn, isMusicOn: () => musicOn,
+               getSfxVol: () => sfxVol, getMusicVol: () => musicVol,
+               get gestureReceived() { return gestureReceived; },
+               set onGesture(fn) { onGestureQueue = fn; }
+             };
+    })();
+
+    const isLocal = location.protocol === 'file:';
+
+    // ===== YouTube IFrame API =====
+    let ytPlayer = null, ytReady = false;
+
+    function onYouTubeIframeAPIReady() {
+      if (!Sound.gestureReceived) { Sound.onGesture = createYTPlayer; return; }
+      createYTPlayer();
+    }
+
+    function createYTPlayer() {
+      if (!Sound.isMusicOn()) return;
+      ytPlayer = new YT.Player('ytPlayer', {
+        height: '1', width: '1',
+        playerVars: {
+          listType: 'playlist',
+          list: 'OLAK5uy_lziv66xux4fpp4gjWobjMUWkti8gYl9zQ',
+          autoplay: 1, loop: 1, controls: 0, disablekb: 1, fs: 0,
+          modestbranding: 1, rel: 0
+        },
+        events: {
+          onReady: e => { ytReady = true; e.target.setShuffle(true); e.target.setVolume(Sound.getMusicVol()); if (Sound.isMusicOn()) e.target.playVideo(); },
+          onError: e => console.warn('[music] YT error', e.data),
+          onStateChange: e => { if (e.data === YT.PlayerState.ENDED) e.target.playVideo(); }
+        }
+      });
+    }
+
+    // Sync menu UI to stored prefs
+    musicToggle.textContent = Sound.isMusicOn() ? 'Music: On' : 'Music: Off';
+    sfxToggle.textContent = Sound.isSfxOn() ? 'SFX: On' : 'SFX: Off';
+    musicVolEl.value = Sound.getMusicVol();
+    sfxVolEl.value = Math.round(Sound.getSfxVol() * 100);
 
     const DPR = Math.max(1, Math.floor(window.devicePixelRatio || 1));
 
@@ -181,6 +385,15 @@
     const EMPTY = 0, P1 = 1, P2 = 2; // P1=blue, P2=yellow
     let board, current, winner, moveCount;
     let splashActive = true;
+    let gameMode = +(localStorage.getItem('gameMode') || 2); // 1 = vs AI, 2 = local 2P
+
+    // Slide cooldown state
+    let slideCooldown = +(localStorage.getItem('slideCooldown') ?? 2);
+    let slideHistory = []; // FIFO of { kind:'row'|'col', idx:0-8 }
+
+    function isSlideForbidden(kind, idx) {
+      return slideHistory.some(h => h.kind === kind && h.idx === idx);
+    }
 
     // Animation state
     let anim = null; // { kind:'row'|'col', idx:number, dir:-1|+1, t:0..1, start:number, dur:number, pre:Array, post:Array }
@@ -188,16 +401,32 @@
     // Per-mini-board fade state: alpha per owner. Fades in on capture, fades out on loss or neutral.
     const blockFade = Array.from({length:3}, () => Array.from({length:3}, () => ({ a1:0, a2:0 })));
     const FADE_SPEED = 6; // per second, ~0->1 in ~166ms
+    const prevOwnership = Array.from({length:3}, () => Array(3).fill(EMPTY));
+    let prevLines = new Set();
+
+    // --- Procedural visuals ---
+    const PROCEDURAL_FLOWERS = true;
+    const flowerState = new Map();
+    const grassState = new Map();
+    const SPRING_K = 150;
+    const SPRING_DAMP = 10;
+    const SPRING_IMPULSE = 8;
+    const SHOW_WALKERS = false;
+    const walkers = [];
+    const arrowSpring = new Map(); // key: "cx,cy" → { scale, vel }
 
     // Global RAF loop time
     let lastTime = 0;
 
     // --- Splash screen ---
-    splashPlayBtn.addEventListener('click', dismissSplash);
+    splash1PBtn.addEventListener('click', () => { gameMode = 1; try { localStorage.setItem('gameMode', 1); } catch(e){} updateModeBtn(); dismissSplash(); });
+    splash2PBtn.addEventListener('click', () => { gameMode = 2; try { localStorage.setItem('gameMode', 2); } catch(e){} updateModeBtn(); dismissSplash(); });
+    function updateModeBtn() { modeBtn.textContent = 'Mode: ' + (gameMode === 1 ? '1P' : '2P'); }
 
     function dismissSplash(){
       if (!splashActive) return;
       splashActive = false;
+      Sound.unlock();
       splashEl.classList.add('hidden');
       openBtn.style.opacity = '1';
       turnIndicator.style.opacity = '1';
@@ -206,9 +435,12 @@
 
     function reset(){
       board = Array.from({length: GRID}, () => Array(GRID).fill(EMPTY));
-      current = P1; winner = 0; moveCount = 0; anim = null;
+      current = P1; winner = 0; moveCount = 0; anim = null; slideHistory = [];
+      flowerState.clear(); grassState.clear(); walkers.length = 0;
       // reset fades
       for (let by=0; by<3; by++) for (let bx=0; bx<3; bx++){ blockFade[by][bx].a1 = 0; blockFade[by][bx].a2 = 0; }
+      for (let by=0;by<3;by++) for (let bx=0;bx<3;bx++) prevOwnership[by][bx] = EMPTY;
+      prevLines = new Set();
       hideWinOverlay();
       updateStatus();
       draw(); drawMetaPreview();
@@ -218,6 +450,20 @@
 
     resetBtn.addEventListener('click', () => { reset(); });
     swapBtn.addEventListener('click', () => { swapStarter(); });
+    modeBtn.addEventListener('click', () => { gameMode = gameMode === 1 ? 2 : 1; try { localStorage.setItem('gameMode', gameMode); } catch(e){} updateModeBtn(); reset(); });
+    updateModeBtn();
+    musicToggle.addEventListener('click', () => { const on = Sound.toggleMusic(); musicToggle.textContent = on ? 'Music: On' : 'Music: Off'; });
+    sfxToggle.addEventListener('click', () => { const on = Sound.toggleSfx(); sfxToggle.textContent = on ? 'SFX: On' : 'SFX: Off'; });
+    musicVolEl.addEventListener('input', () => Sound.setMusicVol(+musicVolEl.value));
+    sfxVolEl.addEventListener('input', () => Sound.setSfxVol(+sfxVolEl.value / 100));
+    slideCooldownSlider.value = slideCooldown;
+    slideCooldownVal.textContent = slideCooldown;
+    slideCooldownSlider.addEventListener('input', () => {
+      slideCooldown = +slideCooldownSlider.value;
+      slideCooldownVal.textContent = slideCooldown;
+      try { localStorage.setItem('slideCooldown', slideCooldown); } catch(e){}
+      while (slideHistory.length > slideCooldown) slideHistory.shift();
+    });
 
     // Resize: scale canvas to exact pixel size of logical board scaled to fit viewport while keeping square aspect.
     function resize(){
@@ -233,6 +479,7 @@
       game.style.width = cssW + 'px';
       game.style.height = cssH + 'px';
       ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+      ctx.imageSmoothingEnabled = false;
 
       // Meta preview DPI
       const metaSize = Math.min(140, Math.floor(Math.min(innerWidth, innerHeight) * 0.22));
@@ -288,11 +535,15 @@
     // Arrow rects are full cell squares in the gutters
     function isArrowCell(cx, cy){
       if (anim) return null; // block during animation
-      if (cx === 0 && cy >= GUTTER && cy < GUTTER + GRID) return {type:'row-left', idx: cy - GUTTER};
-      if (cx === TOTAL-1 && cy >= GUTTER && cy < GUTTER + GRID) return {type:'row-right', idx: cy - GUTTER};
-      if (cy === 0 && cx >= GUTTER && cx < GUTTER + GRID) return {type:'col-up', idx: cx - GUTTER};
-      if (cy === TOTAL-1 && cx >= GUTTER && cx < GUTTER + GRID) return {type:'col-down', idx: cx - GUTTER};
-      return null;
+      let result = null;
+      if (cx === 0 && cy >= GUTTER && cy < GUTTER + GRID) result = {type:'row-left', idx: cy - GUTTER};
+      else if (cx === TOTAL-1 && cy >= GUTTER && cy < GUTTER + GRID) result = {type:'row-right', idx: cy - GUTTER};
+      else if (cy === 0 && cx >= GUTTER && cx < GUTTER + GRID) result = {type:'col-up', idx: cx - GUTTER};
+      else if (cy === TOTAL-1 && cx >= GUTTER && cx < GUTTER + GRID) result = {type:'col-down', idx: cx - GUTTER};
+      if (!result) return null;
+      const kind = result.type.startsWith('row') ? 'row' : 'col';
+      if (isSlideForbidden(kind, result.idx)) return null;
+      return result;
     }
 
     // --- Ownership helpers with bounds safety ---
@@ -336,6 +587,183 @@
       setTimeout(() => showWinOverlay(winner), 400);
     }
 
+    function completedLineSet() {
+      const set = new Set();
+      for (let by = 0; by < 3; by++) {
+        for (let bx = 0; bx < 3; bx++) {
+          const sx = bx * 3, sy = by * 3, base = (by * 3 + bx) * 8;
+          // rows
+          for (let r = 0; r < 3; r++) {
+            const line = [board[sy+r][sx], board[sy+r][sx+1], board[sy+r][sx+2]];
+            if (line[0] !== EMPTY && line.every(v => v === line[0])) set.add(base + r);
+          }
+          // cols
+          for (let c = 0; c < 3; c++) {
+            const line = [board[sy][sx+c], board[sy+1][sx+c], board[sy+2][sx+c]];
+            if (line[0] !== EMPTY && line.every(v => v === line[0])) set.add(base + 3 + c);
+          }
+          // diags
+          const d1 = [board[sy][sx], board[sy+1][sx+1], board[sy+2][sx+2]];
+          if (d1[0] !== EMPTY && d1.every(v => v === d1[0])) set.add(base + 6);
+          const d2 = [board[sy][sx+2], board[sy+1][sx+1], board[sy+2][sx]];
+          if (d2[0] !== EMPTY && d2.every(v => v === d2[0])) set.add(base + 7);
+        }
+      }
+      return set;
+    }
+
+    function checkOwnershipChanges() {
+      // Update prevOwnership (used by reset)
+      for (let by = 0; by < 3; by++)
+        for (let bx = 0; bx < 3; bx++)
+          prevOwnership[by][bx] = smallOwner(bx, by);
+      // Count new completed lines
+      const curLines = completedLineSet();
+      let newCount = 0;
+      for (const k of curLines) if (!prevLines.has(k)) newCount++;
+      prevLines = curLines;
+      if (newCount >= 2) Sound.play('multicapture');
+      else if (newCount === 1) Sound.play('capture');
+    }
+
+    // --- AI (Minimax, 2-ply) ---
+    function lineCountFrom(b, bx, by, player) {
+      const sx = bx * 3, sy = by * 3; let count = 0;
+      for (let r = 0; r < 3; r++) if ([b[sy+r][sx], b[sy+r][sx+1], b[sy+r][sx+2]].every(v => v === player)) count++;
+      for (let c = 0; c < 3; c++) if ([b[sy][sx+c], b[sy+1][sx+c], b[sy+2][sx+c]].every(v => v === player)) count++;
+      if ([b[sy][sx], b[sy+1][sx+1], b[sy+2][sx+2]].every(v => v === player)) count++;
+      if ([b[sy][sx+2], b[sy+1][sx+1], b[sy+2][sx]].every(v => v === player)) count++;
+      return count;
+    }
+
+    function evaluateBoard(b) {
+      const mw = metaWinnerFrom(b);
+      if (mw === P2) return 10000;
+      if (mw === P1) return -10000;
+      let score = 0;
+      // Meta-board analysis
+      const M = Array.from({length:3}, () => Array(3).fill(EMPTY));
+      for (let by = 0; by < 3; by++) for (let bx = 0; bx < 3; bx++) M[by][bx] = smallOwnerFrom(b, bx, by);
+      // Meta lines
+      const metaLines = [];
+      for (let r = 0; r < 3; r++) metaLines.push([M[r][0], M[r][1], M[r][2]]);
+      for (let c = 0; c < 3; c++) metaLines.push([M[0][c], M[1][c], M[2][c]]);
+      metaLines.push([M[0][0], M[1][1], M[2][2]]);
+      metaLines.push([M[0][2], M[1][1], M[2][0]]);
+      for (const line of metaLines) {
+        const p2c = line.filter(v => v === P2).length;
+        const p1c = line.filter(v => v === P1).length;
+        if (p2c === 2 && p1c === 0) score += 500;
+        if (p1c === 2 && p2c === 0) score -= 500;
+      }
+      // Board ownership + line count
+      for (let by = 0; by < 3; by++) {
+        for (let bx = 0; bx < 3; bx++) {
+          if (M[by][bx] === P2) score += 100;
+          else if (M[by][bx] === P1) score -= 100;
+          score += (lineCountFrom(b, bx, by, P2) - lineCountFrom(b, bx, by, P1)) * 10;
+        }
+      }
+      return score;
+    }
+
+    function getAllMoves(b) {
+      const moves = [];
+      for (let y = 0; y < GRID; y++)
+        for (let x = 0; x < GRID; x++)
+          if (b[y][x] === EMPTY) moves.push({ type: 'place', x, y });
+      for (let r = 0; r < GRID; r++) {
+        if (!isSlideForbidden('row', r)) {
+          moves.push({ type: 'row', idx: r, dir: -1 });
+          moves.push({ type: 'row', idx: r, dir: 1 });
+        }
+      }
+      for (let c = 0; c < GRID; c++) {
+        if (!isSlideForbidden('col', c)) {
+          moves.push({ type: 'col', idx: c, dir: -1 });
+          moves.push({ type: 'col', idx: c, dir: 1 });
+        }
+      }
+      return moves;
+    }
+
+    function applyMove(b, move, player) {
+      const nb = b.map(r => r.slice());
+      if (move.type === 'place') {
+        nb[move.y][move.x] = player;
+      } else if (move.type === 'row') {
+        const row = nb[move.idx].slice();
+        if (move.dir === -1) { const f = row[0]; for (let c = 0; c < GRID-1; c++) row[c] = row[c+1]; row[GRID-1] = f; }
+        else { const l = row[GRID-1]; for (let c = GRID-1; c > 0; c--) row[c] = row[c-1]; row[0] = l; }
+        nb[move.idx] = row;
+      } else {
+        const col = nb.map(r => r[move.idx]);
+        if (move.dir === -1) { const f = col[0]; for (let r = 0; r < GRID-1; r++) col[r] = col[r+1]; col[GRID-1] = f; }
+        else { const l = col[GRID-1]; for (let r = GRID-1; r > 0; r--) col[r] = col[r-1]; col[0] = l; }
+        for (let r = 0; r < GRID; r++) nb[r][move.idx] = col[r];
+      }
+      return nb;
+    }
+
+    function minimax(b, depth, alpha, beta, maximizing) {
+      const mw = metaWinnerFrom(b);
+      if (mw === P2) return 10000;
+      if (mw === P1) return -10000;
+      if (depth === 0) return evaluateBoard(b);
+      const player = maximizing ? P2 : P1;
+      const moves = getAllMoves(b);
+      if (maximizing) {
+        let best = -Infinity;
+        for (const m of moves) {
+          const nb = applyMove(b, m, player);
+          const val = minimax(nb, depth - 1, alpha, beta, false);
+          best = Math.max(best, val);
+          alpha = Math.max(alpha, val);
+          if (beta <= alpha) break;
+        }
+        return best;
+      } else {
+        let best = Infinity;
+        for (const m of moves) {
+          const nb = applyMove(b, m, player);
+          const val = minimax(nb, depth - 1, alpha, beta, true);
+          best = Math.min(best, val);
+          beta = Math.min(beta, val);
+          if (beta <= alpha) break;
+        }
+        return best;
+      }
+    }
+
+    function aiMove() {
+      if (gameMode !== 1 || current !== P2 || winner) return;
+      const moves = getAllMoves(board);
+      let bestVal = -Infinity, bestMove = moves[0];
+      for (const m of moves) {
+        const nb = applyMove(board, m, P2);
+        const val = minimax(nb, 1, -Infinity, Infinity, false); // depth 1 remaining = 2-ply total
+        if (val > bestVal) { bestVal = val; bestMove = m; }
+      }
+      if (!bestMove) return;
+      if (bestMove.type === 'place') {
+        board[bestMove.y][bestMove.x] = P2;
+        Sound.play('place', { pitchVar: true });
+        ensureFlowerState(bestMove.x, bestMove.y, P2);
+        moveCount++; current = other(current); winner = metaWinner(); updateStatus();
+        checkOwnershipChanges();
+        checkForWin();
+        draw(); drawMetaPreview();
+      } else if (bestMove.type === 'row') {
+        startRowSlide(bestMove.idx, bestMove.dir);
+      } else {
+        startColSlide(bestMove.idx, bestMove.dir);
+      }
+    }
+
+    function scheduleAI() {
+      if (gameMode === 1 && current === P2 && !winner) setTimeout(aiMove, 500);
+    }
+
     // --- Animation helpers ---
     function startRowSlide(r, dir){
       if (anim) return;
@@ -344,6 +772,8 @@
       if (dir === -1){ const first = post[0]; for (let c=0;c<GRID-1;c++) post[c]=post[c+1]; post[GRID-1]=first; }
       else { const last = post[GRID-1]; for (let c=GRID-1;c>0;c--) post[c]=post[c-1]; post[0]=last; }
       anim = { kind:'row', idx:r, dir, t:0, start:performance.now(), dur:180, pre, post };
+      Sound.play('slide');
+      applySlideImpulse('row', r, dir);
       updateStatus();
     }
 
@@ -354,6 +784,8 @@
       if (dir === -1){ const first = post[0]; for (let r=0;r<GRID-1;r++) post[r]=post[r+1]; post[GRID-1]=first; }
       else { const last = post[GRID-1]; for (let r=GRID-1;r>0;r--) post[r]=post[r-1]; post[0]=last; }
       anim = { kind:'col', idx:c, dir, t:0, start:performance.now(), dur:180, pre, post };
+      Sound.play('slide');
+      applySlideImpulse('col', c, dir);
       updateStatus();
     }
 
@@ -364,10 +796,16 @@
       } else {
         for (let r=0;r<GRID;r++) board[r][anim.idx] = anim.post[r];
       }
+      remapFlowerKeys(anim.kind, anim.idx, anim.dir);
+      remapGrassKeys(anim.kind, anim.idx, anim.dir);
+      slideHistory.push({ kind: anim.kind, idx: anim.idx });
+      while (slideHistory.length > slideCooldown) slideHistory.shift();
       anim = null;
       moveCount++; current = other(current); winner = metaWinner(); updateStatus();
+      checkOwnershipChanges();
       checkForWin();
       draw(); drawMetaPreview();
+      scheduleAI();
     }
 
     // Per-frame update
@@ -392,6 +830,11 @@
         }
       }
 
+      // Procedural updates
+      updateFlowerSprings(dt);
+      updateArrowSprings(dt);
+      updateWalkers(dt);
+
       // slide animation
       if (anim){
         const elapsed = (performance.now() - anim.start);
@@ -414,6 +857,7 @@
     // Input
     game.addEventListener('click', e => {
       if (!board || winner) return;
+      if (gameMode === 1 && current === P2) return; // AI's turn
       const {mx, my} = toLocal(e);
       const cell = localToCell(mx, my); if (!cell) return;
       if (anim) return; // ignore during animation
@@ -433,12 +877,28 @@
         const gx = cell.cx - GUTTER; const gy = cell.cy - GUTTER;
         if (board[gy][gx] === EMPTY){
           board[gy][gx] = current;
+          Sound.play('place', { pitchVar: true });
+          ensureFlowerState(gx, gy, current);
+          if (SHOW_WALKERS) spawnWalker(current, gx, gy);
           moveCount++; current = other(current); winner = metaWinner(); updateStatus();
+          checkOwnershipChanges();
           checkForWin();
           draw(); drawMetaPreview();
+          scheduleAI();
         }
       }
     });
+
+    let hoveredArrow = null; // { cx, cy, type } or null
+    game.addEventListener('pointermove', e => {
+      const {mx, my} = toLocal(e);
+      const cell = localToCell(mx, my);
+      if (cell) {
+        const arrow = isArrowCell(cell.cx, cell.cy);
+        hoveredArrow = arrow ? { cx: cell.cx, cy: cell.cy, type: arrow.type } : null;
+      } else { hoveredArrow = null; }
+    });
+    game.addEventListener('pointerleave', () => { hoveredArrow = null; });
 
     addEventListener('keydown', e => {
       const k = e.key.toLowerCase();
@@ -456,25 +916,324 @@
       else { const last = board[GRID-1][c]; for (let r=GRID-1;r>0;r--) board[r][c] = board[r-1][c]; board[0][c] = last; }
     }
 
+    // --- Procedural flower helpers ---
+    function ensureFlowerState(gx, gy, owner) {
+      const key = gx + ',' + gy;
+      if (!flowerState.has(key)) {
+        const type = flowerHash(gx, gy) % 5;
+        flowerState.set(key, { owner, phase: Math.random() * Math.PI * 2, springDisp: 0, springVel: 0, type });
+      }
+      const s = flowerState.get(key);
+      s.owner = owner;
+      return s;
+    }
+
+    function applySlideImpulse(kind, idx, dir) {
+      for (let y = 0; y < GRID; y++) {
+        for (let x = 0; x < GRID; x++) {
+          const key = x + ',' + y;
+          const s = flowerState.get(key);
+          if (!s) continue;
+          const dist = kind === 'row' ? Math.abs(y - idx) : Math.abs(x - idx);
+          const scale = dist === 0 ? 1.0 : dist === 1 ? 0.6 : dist === 2 ? 0.3 : 0;
+          if (scale > 0) s.springVel -= dir * SPRING_IMPULSE * scale;
+        }
+      }
+    }
+
+    function remapFlowerKeys(kind, idx, dir) {
+      if (kind === 'row') {
+        const row = [];
+        for (let x = 0; x < GRID; x++) { const k = x + ',' + idx; row.push(flowerState.get(k) || null); flowerState.delete(k); }
+        const shifted = new Array(GRID);
+        for (let x = 0; x < GRID; x++) shifted[x] = row[((x - dir) % GRID + GRID) % GRID];
+        for (let x = 0; x < GRID; x++) { if (shifted[x]) flowerState.set(x + ',' + idx, shifted[x]); }
+      } else {
+        const col = [];
+        for (let y = 0; y < GRID; y++) { const k = idx + ',' + y; col.push(flowerState.get(k) || null); flowerState.delete(k); }
+        const shifted = new Array(GRID);
+        for (let y = 0; y < GRID; y++) shifted[y] = col[((y - dir) % GRID + GRID) % GRID];
+        for (let y = 0; y < GRID; y++) { if (shifted[y]) flowerState.set(idx + ',' + y, shifted[y]); }
+      }
+    }
+
+    function ensureGrassState(x, y) {
+      const k = x + ',' + y;
+      if (!grassState.has(k)) grassState.set(k, ((x * 73856093) ^ (y * 19349663)) >>> 0);
+      return grassState.get(k);
+    }
+
+    function remapGrassKeys(kind, idx, dir) {
+      if (kind === 'row') {
+        const row = [];
+        for (let x = 0; x < GRID; x++) { const k = x + ',' + idx; row.push(grassState.get(k) || null); grassState.delete(k); }
+        const shifted = new Array(GRID);
+        for (let x = 0; x < GRID; x++) shifted[x] = row[((x - dir) % GRID + GRID) % GRID];
+        for (let x = 0; x < GRID; x++) { if (shifted[x] !== null) grassState.set(x + ',' + idx, shifted[x]); }
+      } else {
+        const col = [];
+        for (let y = 0; y < GRID; y++) { const k = idx + ',' + y; col.push(grassState.get(k) || null); grassState.delete(k); }
+        const shifted = new Array(GRID);
+        for (let y = 0; y < GRID; y++) shifted[y] = col[((y - dir) % GRID + GRID) % GRID];
+        for (let y = 0; y < GRID; y++) { if (shifted[y] !== null) grassState.set(idx + ',' + y, shifted[y]); }
+      }
+    }
+
+    function updateFlowerSprings(dt) {
+      for (const [, s] of flowerState) {
+        s.springVel += (-SPRING_K * s.springDisp - SPRING_DAMP * s.springVel) * dt;
+        s.springDisp += s.springVel * dt;
+        if (Math.abs(s.springDisp) < 0.0001 && Math.abs(s.springVel) < 0.0001) { s.springDisp = 0; s.springVel = 0; }
+      }
+    }
+
+    function ensureArrowSpring(cx, cy) {
+      const k = cx + ',' + cy;
+      if (!arrowSpring.has(k)) arrowSpring.set(k, { scale: 0.5, vel: 0 });
+      return arrowSpring.get(k);
+    }
+
+    function updateArrowSprings(dt) {
+      for (const [k, s] of arrowSpring) {
+        const [cx, cy] = k.split(',').map(Number);
+        const hovered = hoveredArrow && hoveredArrow.cx === cx && hoveredArrow.cy === cy;
+        const target = hovered ? 1.0 : 0.5;
+        const ARROW_K = 200, ARROW_D = 14;
+        s.vel += (-ARROW_K * (s.scale - target) - ARROW_D * s.vel) * dt;
+        s.scale += s.vel * dt;
+        if (Math.abs(s.scale - target) < 0.001 && Math.abs(s.vel) < 0.01) { s.scale = target; s.vel = 0; }
+      }
+    }
+
+    // --- Autotile edge helpers ---
+    function getNeighborMask(x, y) {
+      const owner = board[y][x];
+      if (!owner) return 0;
+      let mask = 0;
+      if (y > 0 && board[y-1][x] === owner) mask |= 1;
+      if (x < GRID-1 && board[y][x+1] === owner) mask |= 2;
+      if (y < GRID-1 && board[y+1][x] === owner) mask |= 4;
+      if (x > 0 && board[y][x-1] === owner) mask |= 8;
+      return mask;
+    }
+
+    function drawAutotileEdges(x, y) {
+      const owner = board[y][x];
+      if (!owner) return;
+      const mask = getNeighborMask(x, y);
+      const left = ORIGIN_X + x * CELL;
+      const top = ORIGIN_Y + y * CELL;
+      const rgb = owner === P1 ? '91,185,255' : '255,210,64';
+      // Connected sides: subtle owner-color strip; unconnected: dark edge
+      if (mask & 1) { ctx.fillStyle = `rgba(${rgb},0.1)`; ctx.fillRect(left, top, CELL, 2); }
+      else { ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.fillRect(left, top, CELL, 1); }
+      if (mask & 2) { ctx.fillStyle = `rgba(${rgb},0.1)`; ctx.fillRect(left + CELL - 2, top, 2, CELL); }
+      else { ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.fillRect(left + CELL - 1, top, 1, CELL); }
+      if (mask & 4) { ctx.fillStyle = `rgba(${rgb},0.1)`; ctx.fillRect(left, top + CELL - 2, CELL, 2); }
+      else { ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.fillRect(left, top + CELL - 1, CELL, 1); }
+      if (mask & 8) { ctx.fillStyle = `rgba(${rgb},0.1)`; ctx.fillRect(left, top, 2, CELL); }
+      else { ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.fillRect(left, top, 1, CELL); }
+    }
+
+    // --- Procedural flower drawing (5 shape types) ---
+    function flowerHash(gx, gy) {
+      let n = (gx * 73856093) ^ (gy * 19349663);
+      n = ((n >> 16) ^ n) * 0x45d9f3b;
+      n = ((n >> 16) ^ n) * 0x45d9f3b;
+      return (n ^ (n >> 16)) >>> 0;
+    }
+
+    function drawProceduralFlower(cx, cy, gx, gy, player) {
+      const s = ensureFlowerState(gx, gy, player);
+      const now = performance.now() * 0.001;
+      const idleSway = Math.sin(now * 1.5 + s.phase) * 0.06;
+      const totalSway = idleSway + s.springDisp;
+      const baseY = cy + CELL * 0.33;
+      const stemLen = CELL * 0.5;
+      const petalColor = player === P1 ? '#5bb9ff' : '#ffd240';
+      const centerColor = player === P1 ? '#fff' : '#8B6914';
+      const stemColor = '#3a8f3a';
+      const type = s.type;
+
+      ctx.save();
+      ctx.translate(cx, baseY);
+      ctx.rotate(totalSway);
+
+      // Draw stem (shared by all types)
+      ctx.strokeStyle = stemColor;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, -stemLen); ctx.stroke();
+
+      if (type === 0) {
+        // 5-petal round
+        const pr = CELL * 0.12, pd = CELL * 0.09;
+        ctx.fillStyle = petalColor;
+        for (let i = 0; i < 5; i++) {
+          const a = (i / 5) * Math.PI * 2 - Math.PI / 2;
+          ctx.save();
+          ctx.translate(Math.cos(a) * pd, -stemLen + Math.sin(a) * pd);
+          ctx.rotate(a);
+          ctx.beginPath(); ctx.ellipse(0, 0, pr, pr * 0.6, 0, 0, Math.PI * 2); ctx.fill();
+          ctx.restore();
+        }
+        ctx.fillStyle = centerColor;
+        ctx.beginPath(); ctx.arc(0, -stemLen, CELL * 0.05, 0, Math.PI * 2); ctx.fill();
+
+      } else if (type === 1) {
+        // 6-petal star (elongated pointed petals)
+        const pr = CELL * 0.14, pd = CELL * 0.08;
+        ctx.fillStyle = petalColor;
+        for (let i = 0; i < 6; i++) {
+          const a = (i / 6) * Math.PI * 2 - Math.PI / 2;
+          ctx.save();
+          ctx.translate(Math.cos(a) * pd, -stemLen + Math.sin(a) * pd);
+          ctx.rotate(a);
+          ctx.beginPath(); ctx.ellipse(0, 0, pr, pr * 0.3, 0, 0, Math.PI * 2); ctx.fill();
+          ctx.restore();
+        }
+        ctx.fillStyle = centerColor;
+        ctx.beginPath(); ctx.arc(0, -stemLen, CELL * 0.05, 0, Math.PI * 2); ctx.fill();
+
+      } else if (type === 2) {
+        // Daisy — 8 thin petals, small center
+        const pr = CELL * 0.13, pd = CELL * 0.07;
+        ctx.fillStyle = petalColor;
+        for (let i = 0; i < 8; i++) {
+          const a = (i / 8) * Math.PI * 2 - Math.PI / 2;
+          ctx.save();
+          ctx.translate(Math.cos(a) * pd, -stemLen + Math.sin(a) * pd);
+          ctx.rotate(a);
+          ctx.beginPath(); ctx.ellipse(0, 0, pr, pr * 0.25, 0, 0, Math.PI * 2); ctx.fill();
+          ctx.restore();
+        }
+        ctx.fillStyle = centerColor;
+        ctx.beginPath(); ctx.arc(0, -stemLen, CELL * 0.04, 0, Math.PI * 2); ctx.fill();
+
+      } else if (type === 3) {
+        // Tulip — 3 wide overlapping petals, cup shape
+        ctx.fillStyle = petalColor;
+        for (let i = 0; i < 3; i++) {
+          const a = (i / 3) * Math.PI - Math.PI / 2;
+          const ox = Math.cos(a) * CELL * 0.04;
+          const oy = -stemLen + Math.sin(a) * CELL * 0.03 - CELL * 0.02;
+          ctx.save();
+          ctx.translate(ox, oy);
+          ctx.rotate(a * 0.3);
+          ctx.beginPath(); ctx.ellipse(0, 0, CELL * 0.09, CELL * 0.15, 0, 0, Math.PI * 2); ctx.fill();
+          ctx.restore();
+        }
+        ctx.fillStyle = centerColor;
+        ctx.beginPath(); ctx.arc(0, -stemLen, CELL * 0.03, 0, Math.PI * 2); ctx.fill();
+
+      } else {
+        // Cluster — 3 tiny flowers on branching stems
+        const offsets = [
+          { dx: -CELL * 0.08, dy: -stemLen * 0.95 },
+          { dx:  CELL * 0.07, dy: -stemLen * 0.85 },
+          { dx:  CELL * 0.01, dy: -stemLen * 1.05 }
+        ];
+        for (const o of offsets) {
+          // branch stem
+          ctx.strokeStyle = stemColor; ctx.lineWidth = 1;
+          ctx.beginPath(); ctx.moveTo(0, -stemLen * 0.5); ctx.lineTo(o.dx, o.dy); ctx.stroke();
+          // tiny flower
+          ctx.fillStyle = petalColor;
+          for (let i = 0; i < 4; i++) {
+            const a = (i / 4) * Math.PI * 2;
+            ctx.beginPath();
+            ctx.ellipse(o.dx + Math.cos(a) * CELL * 0.03, o.dy + Math.sin(a) * CELL * 0.03,
+                        CELL * 0.04, CELL * 0.025, a, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.fillStyle = centerColor;
+          ctx.beginPath(); ctx.arc(o.dx, o.dy, CELL * 0.02, 0, Math.PI * 2); ctx.fill();
+        }
+      }
+
+      ctx.restore();
+    }
+
+    // --- Walking character helpers ---
+    function spawnWalker(player, gx, gy) {
+      const targetX = ORIGIN_X + gx * CELL + CELL / 2;
+      const targetY = ORIGIN_Y + gy * CELL + CELL / 2;
+      let startX, startY;
+      if (player === P1) { startX = ORIGIN_X + GRID * CELL; startY = ORIGIN_Y + GRID * CELL; }
+      else { startX = ORIGIN_X + GRID * CELL; startY = ORIGIN_Y; }
+      walkers.push({ player, startX, startY, targetX, targetY, progress: 0, speed: 4, gx, gy });
+    }
+
+    function updateWalkers(dt) {
+      for (let i = walkers.length - 1; i >= 0; i--) {
+        walkers[i].progress += walkers[i].speed * dt;
+        if (walkers[i].progress >= 1) walkers.splice(i, 1);
+      }
+    }
+
+    function drawWalker(w) {
+      const t = Math.min(1, w.progress);
+      const ease = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+      const x = w.startX + (w.targetX - w.startX) * ease;
+      const y = w.startY + (w.targetY - w.startY) * ease;
+      const phase = t * Math.PI * 8;
+      const bob = Math.sin(phase) * 1.5;
+      const legSwing = Math.sin(phase) * 3;
+      const color = w.player === P1 ? '#5bb9ff' : '#ffd240';
+      ctx.save();
+      ctx.translate(x, y + bob);
+      // Legs
+      ctx.strokeStyle = color; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(-1, 3); ctx.lineTo(-1 - legSwing, 7); ctx.moveTo(1, 3); ctx.lineTo(1 + legSwing, 7); ctx.stroke();
+      // Body
+      ctx.fillStyle = color; ctx.fillRect(-2, -4, 4, 7);
+      // Head
+      ctx.fillRect(-2, -7, 4, 3);
+      ctx.restore();
+    }
+
+    function drawAllWalkers() { for (const w of walkers) drawWalker(w); }
+
     // Drawing helpers ------------------------------------------------------
     function seededChoice(x,y){ return ((x*73856093) ^ (y*19349663)) & 1; }
 
     function drawCellBackground(x, y){
       const left = ORIGIN_X + x * CELL;
       const top  = ORIGIN_Y + y * CELL;
-      const cx = left + Math.floor(CELL/2);
-      const cy = top  + Math.floor(CELL/2);
-      if (Sprites.isReady()){
-        const base = Sprites.get('iso_tile');
-        const scale = base ? (CELL / base.fw) : 1;
-        Sprites.draw('iso_tile', cx, cy, { center: true, scale });
+      if (PROCEDURAL_FLOWERS) {
+        // Black bg + procedural grass blades
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(left, top, CELL, CELL);
+        let seed = ensureGrassState(x, y);
+        const nextSeed = () => { seed = (seed * 1103515245 + 12345) >>> 0; return seed; };
+        const bladeCount = 4 + (nextSeed() % 5); // 4-8 blades
+        for (let i = 0; i < bladeCount; i++) {
+          const bx = left + 2 + (nextSeed() % (CELL - 4));
+          const by = top + 4 + (nextSeed() % (CELL - 6)); // scattered vertically
+          const bh = 3 + (nextSeed() % 4); // 3-6px tall
+          const lean = ((nextSeed() % 5) - 2) * 0.15; // slight lean
+          const green = 0x1a + (nextSeed() % 0x11); // 0x1a..0x2a
+          ctx.strokeStyle = `rgb(${green >> 1},${green},${green >> 1})`;
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(bx, by);
+          ctx.lineTo(bx + lean * bh, by - bh);
+          ctx.stroke();
+        }
       } else {
-        // simple placeholder while sprites load
-        ctx.fillStyle = '#000000'; ctx.fillRect(left, top, CELL, CELL);
+        const cx = left + Math.floor(CELL/2);
+        const cy = top  + Math.floor(CELL/2);
+        if (Sprites.isReady()){
+          const base = Sprites.get('iso_tile');
+          const scale = base ? (CELL / base.fw) : 1;
+          Sprites.draw('iso_tile', cx, cy, { center: true, scale });
+        } else {
+          ctx.fillStyle = '#000000'; ctx.fillRect(left, top, CELL, CELL);
+        }
       }
     }
 
-    function drawBlueFlower(cx, cy, r){
+    function drawBlueFlower(cx, cy, r, gx, gy){
+      if (PROCEDURAL_FLOWERS && gx !== undefined) { drawProceduralFlower(cx, cy, gx, gy, P1); return; }
       if (Sprites.isReady()){
         const sh = Sprites.get('flower_blue');
         const scale = sh ? (CELL / sh.fw) : 1;
@@ -485,7 +1244,8 @@
       }
     }
 
-    function drawYellowFlower(cx, cy, r){
+    function drawYellowFlower(cx, cy, r, gx, gy){
+      if (PROCEDURAL_FLOWERS && gx !== undefined) { drawProceduralFlower(cx, cy, gx, gy, P2); return; }
       if (Sprites.isReady()){
         const sh = Sprites.get('flower_yellow');
         const scale = sh ? (CELL / sh.fw) : 1;
@@ -496,27 +1256,26 @@
       }
     }
 
-    function drawArrowCell(cx, cy, type){
-      const x = cx*CELL; const y = cy*CELL; const w = CELL; const h = CELL;
-      ctx.fillStyle = '#111111';
+    function drawArrowCell(cx, cy, type, arrowScale){
+      const x = cx*CELL, y = cy*CELL, w = CELL, h = CELL;
+      ctx.fillStyle = '#000000';
       ctx.fillRect(x, y, w, h);
       let rot = 0;
       if (type === 'row-left') rot = Math.PI;
       if (type === 'row-right') rot = 0;
       if (type === 'col-up') rot = -Math.PI/2;
       if (type === 'col-down') rot = Math.PI/2;
-      if (Sprites.isReady()){
-        const sh = Sprites.get('arrow_white');
-        const scale = sh ? (CELL / sh.fw) : 1;
-        const cxp = x + w/2, cyp = y + h/2;
-        Sprites.draw('arrow_white', cxp, cyp, { center: true, scale, rotate: rot, anim: 'idle', tint: getArrowColor() });
-      } else {
-        ctx.save();
-        ctx.translate(x + w/2, y + h/2); ctx.rotate(rot);
-        ctx.fillStyle = getArrowColor();
-        ctx.beginPath(); ctx.moveTo(-w*0.28, -h*0.34); ctx.lineTo(w*0.36, 0); ctx.lineTo(-w*0.28, h*0.34); ctx.closePath(); ctx.fill();
-        ctx.restore();
-      }
+      const s = arrowScale || 0.5;
+      ctx.save();
+      ctx.translate(x + w/2, y + h/2); ctx.rotate(rot);
+      ctx.scale(s, s);
+      ctx.fillStyle = getArrowColor();
+      ctx.beginPath();
+      ctx.moveTo(-w*0.28, -h*0.34);
+      ctx.lineTo(w*0.36, 0);
+      ctx.lineTo(-w*0.28, h*0.34);
+      ctx.closePath(); ctx.fill();
+      ctx.restore();
     }
 
     const TINT_P1 = 'rgba(64,180,255,1)';
@@ -590,12 +1349,16 @@
 
       // gutters
       for (let r=0;r<GRID;r++){
-        drawArrowCell(0, GUTTER + r, 'row-left');
-        drawArrowCell(TOTAL-1, GUTTER + r, 'row-right');
+        if (!isSlideForbidden('row', r)) {
+          drawArrowCell(0, GUTTER + r, 'row-left', ensureArrowSpring(0, GUTTER + r).scale);
+          drawArrowCell(TOTAL-1, GUTTER + r, 'row-right', ensureArrowSpring(TOTAL-1, GUTTER + r).scale);
+        }
       }
       for (let c=0;c<GRID;c++){
-        drawArrowCell(GUTTER + c, 0, 'col-up');
-        drawArrowCell(GUTTER + c, TOTAL-1, 'col-down');
+        if (!isSlideForbidden('col', c)) {
+          drawArrowCell(GUTTER + c, 0, 'col-up', ensureArrowSpring(GUTTER + c, 0).scale);
+          drawArrowCell(GUTTER + c, TOTAL-1, 'col-down', ensureArrowSpring(GUTTER + c, TOTAL-1).scale);
+        }
       }
 
       // ground: skip animating row/col here, they will be drawn separately
@@ -617,9 +1380,26 @@
         }
       }
 
-      // mini board borders
+      // cell grid lines (1px dotted) — pixel-snap with 0.5 translate
+      ctx.save();
+      ctx.translate(0.5, 0.5);
       ctx.globalAlpha = 1;
-      ctx.strokeStyle = '#3a3f46';
+      ctx.strokeStyle = '#1a3a1a';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([2, 4]);
+      for (let i = 1; i < GRID; i++) {
+        // skip lines that fall on mini-board borders (every 3rd)
+        if (i % 3 === 0) continue;
+        const hx = ORIGIN_X + i * CELL;
+        ctx.beginPath(); ctx.moveTo(hx, ORIGIN_Y); ctx.lineTo(hx, ORIGIN_Y + GRID * CELL); ctx.stroke();
+        const hy = ORIGIN_Y + i * CELL;
+        ctx.beginPath(); ctx.moveTo(ORIGIN_X, hy); ctx.lineTo(ORIGIN_X + GRID * CELL, hy); ctx.stroke();
+      }
+      ctx.setLineDash([]);
+      ctx.restore();
+
+      // mini board borders (dark green) — drawn at integer coords for crisp 2px lines
+      ctx.strokeStyle = '#2a5a2a';
       ctx.lineWidth = 2;
       for (let by = 0; by < 3; by++){
         for (let bx = 0; bx < 3; bx++){
@@ -635,8 +1415,8 @@
           const v = board[y][x]; if (!v) continue;
           const cx = ORIGIN_X + x*CELL + Math.floor(CELL/2);
           const cy = ORIGIN_Y + y*CELL + Math.floor(CELL/2);
-          if (v === P1) drawBlueFlower(cx, cy, Math.floor(CELL*0.50));
-          if (v === P2) drawYellowFlower(cx, cy, Math.floor(CELL*0.42));
+          if (v === P1) drawBlueFlower(cx, cy, Math.floor(CELL*0.50), x, y);
+          if (v === P2) drawYellowFlower(cx, cy, Math.floor(CELL*0.42), x, y);
         }
       }
 
@@ -645,6 +1425,9 @@
         if (anim.kind==='row') drawAnimatingRow(anim);
         else drawAnimatingCol(anim);
       }
+
+      // Walking characters
+      if (SHOW_WALKERS) drawAllWalkers();
     }
 
     function wrapIndex(i, n){ return (i % n + n) % n; }
@@ -666,8 +1449,8 @@
         if (v){
           const cx = ORIGIN_X + srcIndex*CELL + Math.floor(CELL/2);
           const cy = ORIGIN_Y + r*CELL + Math.floor(CELL/2);
-          if (v === P1) drawBlueFlower(cx, cy, Math.floor(CELL*0.50));
-          if (v === P2) drawYellowFlower(cx, cy, Math.floor(CELL*0.42));
+          if (v === P1) drawBlueFlower(cx, cy, Math.floor(CELL*0.50), srcIndex, r);
+          if (v === P2) drawYellowFlower(cx, cy, Math.floor(CELL*0.42), srcIndex, r);
         }
         ctx.restore();
       }
@@ -688,8 +1471,8 @@
         if (v){
           const cx = ORIGIN_X + c*CELL + Math.floor(CELL/2);
           const cy = ORIGIN_Y + srcIndex*CELL + Math.floor(CELL/2);
-          if (v === P1) drawBlueFlower(cx, cy, Math.floor(CELL*0.50));
-          if (v === P2) drawYellowFlower(cx, cy, Math.floor(CELL*0.42));
+          if (v === P1) drawBlueFlower(cx, cy, Math.floor(CELL*0.50), c, srcIndex);
+          if (v === P2) drawYellowFlower(cx, cy, Math.floor(CELL*0.42), c, srcIndex);
         }
         ctx.restore();
       }
@@ -807,6 +1590,7 @@
 
       winBgAlpha = 0;
       winAnimRunning = true;
+      Sound.play('win'); Sound.duckMusic();
       winOverlay.classList.add('show');
       winMsg.classList.remove('visible');
 
